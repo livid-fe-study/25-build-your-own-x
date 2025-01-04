@@ -4,9 +4,11 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "lint": "yarn biome check --write --unsafe ."
   },
   "devDependencies": {
+    "@biomejs/biome": "1.9.4",
     "vitest": "^2.1.8"
   }
 }
