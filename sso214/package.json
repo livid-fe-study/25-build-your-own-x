@@ -1,0 +1,12 @@
+{
+  "name": "build-your-own-x",
+  "version": "0.0.1",
+  "author": "sso214",
+  "license": "MIT",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.8"
+  }
+}
