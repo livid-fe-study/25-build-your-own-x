@@ -257,6 +257,168 @@ const element = Didact.createElement(
 
 ## STEP 2. `render` 함수
 
+다음으로 `ReactDOM.render` 함수를 작성해야 합니다.
+
+지금은 DOM에 항목을 추가하는 것만 신경쓰고 있습니다. 업데이트 및 삭제는 나중에 처리하겠습니다.
+
+```diff
++function render(element, container) {
++  // TODO create dom nodes
++}
+​
+const Didact = {
+  createElement,
++  render,
+}
+/** @jsx Didact.createElement */
+const element = (
+  <div id="foo">
+    <a>bar</a>
+    <b />
+  </div>
+)
+const container = document.getElementById("root")
+-ReactDOM.render(element, container)
++Didact.render(element, container)
+```
+
+먼저 element type을 사용하여 DOM 노드를 생성한 다음 새 노드를 컨테이너에 추가합니다.
+
+```js
+function render(element, container) {
+  const dom = document.createElement(element.type)
+​
+  container.appendChild(dom)
+}
+```
+
+각 children에 대해 동일한 작업을 반복적으로 수행합니다.
+
+```diff
+function render(element, container) {
+  const dom = document.createElement(element.type)
+​
++  element.props.children.forEach(child =>
++    render(child, dom)
++  )
+​
+  container.appendChild(dom)
+}
+```
+
+또한 텍스트 element를 처리해야 하는데, element type이 `TEXT_ELEMENT`인 경우 일반 노드 대신 텍스트 노드를 생성합니다.
+
+```diff
+function render(element, container) {
+-  const dom = document.createElement(element.type)
++​  const dom =
++    element.type == "TEXT_ELEMENT"
++      ? document.createTextNode("")
++      : document.createElement(element.type)
+​
+  element.props.children.forEach(child =>
+    render(child, dom)
+  )
+​
+  container.appendChild(dom)
+}
+```
+
+여기서 마지막으로 해야할 일은 props를 노드에 할당하는 것입니다.
+
+```diff
+function render(element, container) {
+  const dom =
+    element.type == "TEXT_ELEMENT"
+      ? document.createTextNode("")
+      : document.createElement(element.type)
+​
++  const isProperty = key => key !== "children"
++  Object.keys(element.props)
++    .filter(isProperty)
++    .forEach(name => {
++      dom[name] = element.props[name]
++    })
+​
+  element.props.children.forEach(child =>
+    render(child, dom)
+  )
+​
+  container.appendChild(dom)
+}
+```
+
+그게 다입니다. 이제 JSX를 DOM에 렌더링할 수 있는 라이브러리가 생겼습니다.
+
+<details>
+<summary>
+  STEP 1~2.전체 코드
+</summary>
+
+```js
+function createElement(type, props, ...children) {
+  return {
+    type,
+    props: {
+      ...props,
+      children: children.map(child =>
+        typeof child === "object"
+          ? child
+          : createTextElement(child)
+      ),
+    },
+  }
+}
+​
+function createTextElement(text) {
+  return {
+    type: "TEXT_ELEMENT",
+    props: {
+      nodeValue: text,
+      children: [],
+    },
+  }
+}
+​
+function render(element, container) {
+  const dom =
+    element.type == "TEXT_ELEMENT"
+      ? document.createTextNode("")
+      : document.createElement(element.type)
+​
+  const isProperty = key => key !== "children"
+  Object.keys(element.props)
+    .filter(isProperty)
+    .forEach(name => {
+      dom[name] = element.props[name]
+    })
+​
+  element.props.children.forEach(child =>
+    render(child, dom)
+  )
+​
+  container.appendChild(dom)
+}
+​
+const Didact = {
+  createElement,
+  render,
+}
+​
+/** @jsx Didact.createElement */
+const element = (
+  <div id="foo">
+    <a>bar</a>
+    <b />
+  </div>
+)
+const container = document.getElementById("root")
+Didact.render(element, container)
+
+```
+
+</details>
+
 ## STEP 3. 동시성 모드
 
 ## STEP 4. Fibers
