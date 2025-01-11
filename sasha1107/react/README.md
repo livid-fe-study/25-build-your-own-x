@@ -87,6 +87,174 @@ container.appendChild(node)
 
 ## STEP 1. `createElement` 함수
 
+먼저 자체 `createElement`를 작성하는 것부터 시작해보겠습니다.
+`createElement` 호출을 볼 수 있도록 JSX를 JS로 변환해 보겠습니다.
+
+```js
+const element = (
+  <div id="foo">
+    <a>bar</a>
+    <b />
+  </div>
+);
+const container = document.getElementById("root");
+ReactDOM.render(element, container);
+```
+
+element는 type과 props가 있는 객체입니다. 함수가 해야할 일은 해당 객체를 생성하는 것 뿐입니다.
+
+```diff
+-const element = (
+-  <div id="foo">
+-    <a>bar</a>
+-    <b />
+-  </div>
+-);
+
++const element = React.createElement(
++  "div",
++  { id: "foo" },
++  React.createElement("a", null, "bar"),
++  React.createElement("b")
++);
+```
+
+`props`에는 스프레드 연산자를 사용하고 children에는 나머지 매개변수 구문을 사요하므로 children prop은 항상 배열이 된다.
+
+```js
+function createElement(type, props, ...children) {
+  return {
+    type,
+    props: {
+      ...props,
+      children,
+    },
+  };
+}
+```
+
+**예시)**
+`createElement("div")` returns:
+
+```js
+{
+"type": "div",
+"props": { "children": [] }
+}
+```
+
+`createElement("div", null, a)` returns:
+
+```js
+{
+"type": "div",
+"props": { "children": [a] }
+}
+```
+
+`createElement("div", null, a, b)` returns:
+
+```js
+{
+"type": "div",
+"props": { "children": [a, b] }
+}
+```
+
+`children` 배열에는 문자열이나 숫자와 같은 원시 값도 포함될 수 있습니다. 따라서 객체가 아닌 모든 것을 자체 엘리먼트 안에 감싸고 이를 위한 특별한 유형을 만들겠습니다: `TEXT_ELEMENT`.
+
+```diff
+-function createElement(type, props, ...children) {
+-  return {
+-    type,
+-    props: {
+-      ...props,
+-      children,
+-    },
+-  };
+-}
++function createElement(type, props, ...children) {
++  return {
++    type,
++    props: {
++      ...props,
++      children: children.map(child =>
++        typeof child === "object"
++          ? child
++          : createTextElement(child)
++      ),
++    },
++  }
++}
++​
++function createTextElement(text) {
++  return {
++    type: "TEXT_ELEMENT",
++    props: {
++      nodeValue: text,
++      children: [],
++    },
++  }
++}
+```
+
+우리는 여전히 React의 `createElement`를 사용하고 있습니다. 이를 대체하기 위해 라이브러리에 이름을 지정해 보겠습니다. React처럼 들리면서도 그 교훈적인 목적을 암시하는 이름이 필요합니다. 이것을 '`Didact`'라고 부르겠습니다.
+
+```js
+function createElement(type, props, ...children) {
+  return {
+    type,
+    props: {
+      ...props,
+      children: children.map(child =>
+        typeof child === "object"
+          ? child
+          : createTextElement(child)
+      ),
+    },
+  }
+}
+​
+function createTextElement(text) {
+  return {
+    type: "TEXT_ELEMENT",
+    props: {
+      nodeValue: text,
+      children: [],
+    },
+  }
+}
+const Didact = {
+  createElement,
+}
+​
+const element = Didact.createElement(
+  "div",
+  { id: "foo" },
+  Didact.createElement("a", null, "bar"),
+  Didact.createElement("b")
+)
+```
+
+```diff
+-const element = Didact.createElement(
+-  "div",
+-  { id: "foo" },
+-  Didact.createElement("a", null, "bar"),
+-  Didact.createElement("b")
+-)
+
++/** @jsx Didact.createElement */
++const element = (
++  <div id="foo">
++    <a>bar</a>
++    <b />
++  </div>
++)
+```
+
+이와 같은 주석이 있으면 babel이 JSX를 트랜스파일할 때 우리가 정의한 함수를 사용합니다.
+
 ## STEP 2. `render` 함수
 
 ## STEP 3. 동시성 모드
