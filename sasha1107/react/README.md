@@ -764,6 +764,90 @@ function performUnitOfWork(fiber) {
 
 ## STEP 5. Render와 Commit Phases
 
+여기서 또 다른 문제가 있습니다.
+
+element에서 작업할 때마다 DOM에 새 노드를 추가하고 있습니다. 그리고 전체 트리 렌더링을 완료하기 전에 브라우저가 작업을 중단할 수 있다는 점을 기억하세요. 이 경우 사용자에게 불완전한 UI가 표시됩니다. 우리는 그런 것을 원하지 않습니다.
+
+따라서 여기에서 DOM을 변경하는 부분을 제거해야 합니다.
+
+```diff
+function performUnitOfWork(fiber) {
+  if (!fiber.dom) {
+    fiber.dom = createDom(fiber)
+  }
+​
+-  if (fiber.parent) {
+-    fiber.parent.dom.appendChild(fiber.dom)
+-  }
+​
+  const elements = fiber.props.children
+  let index = 0
+  let prevSibling = null
+​
+  // ...
+}
+```
+
+```diff
+function render(element, container) {
+-  nextUnitOfWork = {
++  wipRoot = {
+    dom: container,
+    props: {
+      children: [element],
+    },
+  };
++  nextUnitOfWork = wipRoot
+}
+
+let nextUnitOfWork = null
++let wipRoot = null
+```
+
+대신 fiber 트리의 루트를 추적하겠습니다. 이를 진행 중인 작업 루트 또는 `wipRoot`(아마 Work In Progress Root?)라고 부릅니다.
+
+그리고 모든 업이 끝나면(다음 작업 단위가 없으므로 알 수 있습니다.) 전체 파이버 트리를 DOM에 커밋합니다.
+
+```diff
++function commitRoot() {
++  // TODO add nodes to dom
++}
+​
+function render(element, container) {
+  wipRoot = {
+    dom: container,
+    props: {
+      children: [element],
+    },
+  }
+  nextUnitOfWork = wipRoot
+}
+​
+let nextUnitOfWork = null
+let wipRoot = null
+
+​
+function workLoop(deadline) {
+  let shouldYield = false
+  while (nextUnitOfWork && !shouldYield) {
+    nextUnitOfWork = performUnitOfWork(
+      nextUnitOfWork
+    )
+    shouldYield = deadline.timeRemaining() < 1
+  }
+
++  if (!nextUnitOfWork && wipRoot) {
++    commitRoot()
++  }
+
+  requestIdleCallback(workLoop)
+}
+​
+requestIdleCallback(workLoop)
+```
+
+`commitRoot` 함수에서 이 작업을 수행합니다. 여기서 모든 노드를 재귀적으로 돔에 추가합니다.
+
 ## STEP 6. Reconciliation
 
 ## STEP 7. Function Components
