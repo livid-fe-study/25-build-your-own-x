@@ -486,6 +486,282 @@ while (nextUnitOfWork) {
 
 ## STEP 4. Fibers
 
+작업 단위(unit of work)를 구성하려면 데이터 구조인 'fiber tree'가 필요합니다.
+
+각 element마다 하나의 fiber가 있고 각 fiber는 작업 단위(unit of work)가 됩니다.
+
+다음과 같은 element tree를 렌더링한다고 가정해보겠습니다:
+
+```js
+Didact.render(
+  <div>
+    <h1>
+      <p />
+      <a />
+    </h1>
+    <h2 />
+  </div>,
+  container
+);
+```
+
+`render`에서 root fiber를 생성하고 이를 `nextUnitOfWork`로 설정합니다. 나머지 작업은 `performUnitOfWork` 함수에서 이루어지며, 각 fiber에 대해 **3가지 작업**을 수행합니다:
+
+1. DOM에 element를 추가
+2. element의 children에 대한 fiber를 만듭니다.
+3. 다음 작업 단위 선택
+
+이 데이터 구조의 목표 중 하나는 다음 작업 단위를 쉽게 찾을 수 있도록 하는 것입니다. 그렇기 때문에 각 fiber에는 첫번째 자식, 다음 형제, 부모에 대한 링크가 있습니다.
+
+fiber에 대한 작업이 끝나면, 그 fiber에 `child`가 있으면 그 fiber가 다음 작업 단위가 됩니다. 이 예제에서 `div` fiber 작업을 마치면 다음 작업 단위는 `h1` fiber가 됩니다.
+
+fiber에 child가 없는 경우 sibling을 다음 작업 단위로 사용합니다.
+
+그리고 fiber에 child나 sibling이 없는 경우 parent의 sibling인 "uncle"로 이동합니다.
+
+또한 parent에 sibling이 없는 경우, sibling이 있는 parent를 찾거나 루트에 도달할 때까지 부모를 통해 계속 올라갑니다. 루트에 도달하면 이 `render`에 대한 모든 작업이 완료된 것입니다.
+
+이제 이를 코드로 구현해 보겠습니다.
+
+```diff
+-function render(element, container) {
++function createDom(fiber) {
+  const dom =
+-    element.type == "TEXT_ELEMENT"
++    fiber.type == "TEXT_ELEMENT"
+      ? document.createTextNode("")
+-      : document.createElement(element.type)
++      :  document.createElement(fiber.type)
+​
+  const isProperty = key => key !== "children"
+-  Object.keys(element.props)
++  Object.keys(fiber.props)
+    .filter(isProperty)
+    .forEach(name => {
+-      dom[name] = element.props[name]
++      dom[name] = fiber.props[name]
+    })
+​
+-  element.props.children.forEach(child =>
+-    render(child, dom)
+-  )
+-​
+-  container.appendChild(dom)
++  return dom
+}
+​
++function render(element, container) {
++  // TODO set next unit of work
++}
+​
+let nextUnitOfWork = null
+```
+
+render 함수에서 다음 `nextUnitOfWork`를 다음 fiber tree의 루트로 설정합니다.
+
+```js
+function render(element, container) {
+  nextUnitOfWork = {
+    dom: container,
+    props: {
+      children: [element],
+    },
+  };
+}
+```
+
+그런 다음 브라우저가 준비되면 workLoop를 호출하고 루트 작업을 시작합니다.
+
+```js
+function performUnitOfWork(fiber) {
+  if (!fiber.dom) {
+    fiber.dom = createDom(fiber)
+  }
+​
+  if (fiber.parent) {
+    fiber.parent.dom.appendChild(fiber.dom)
+  }
+​
+  // TODO create new fibers
+  // TODO return next unit of work
+}
+```
+
+1. 먼저 새 노드를 생성하여 DOM에 추가합니다.
+   fiber.dom 속성에서 DOM 노드를 추적합니다.
+
+```diff
+function performUnitOfWork(fiber) {
+  if (!fiber.dom) {
+    fiber.dom = createDom(fiber)
+  }
+​
+  if (fiber.parent) {
+    fiber.parent.dom.appendChild(fiber.dom)
+  }
+​
++  const elements = fiber.props.children
++  let index = 0
++  let prevSibling = null
++​
++  while (index < elements.length) {
++    const element = elements[index]
++​
++    const newFiber = {
++      type: element.type,
++      props: element.props,
++      parent: fiber,
++      dom: null,
++    }
++  }
+  // TODO return next unit of work
+}
+```
+
+2. 그런 다음 각 child에 대해 새로운fiber를 만듭니다.
+
+```diff
+function performUnitOfWork(fiber) {
+  if (!fiber.dom) {
+    fiber.dom = createDom(fiber)
+  }
+​
+  if (fiber.parent) {
+    fiber.parent.dom.appendChild(fiber.dom)
+  }
+​
+  const elements = fiber.props.children
+  let index = 0
+  let prevSibling = null
+​
+  while (index < elements.length) {
+    const element = elements[index]
+​
+    const newFiber = {
+      type: element.type,
+      props: element.props,
+      parent: fiber,
+      dom: null,
+    }
+
++    if (index === 0) {
++      fiber.child = newFiber
++    } else {
++      prevSibling.sibling = newFiber
++    }
++​
++    prevSibling = newFiber
++    index++
+  }
+  // TODO return next unit of work
+}
+```
+
+3. 그리고 첫 번째 child인지 여부에 따라 child 또는 sibling으로 설정하여 fiber 트리에 추가합니다.
+
+```diff
+function performUnitOfWork(fiber) {
+  if (!fiber.dom) {
+    fiber.dom = createDom(fiber)
+  }
+​
+  if (fiber.parent) {
+    fiber.parent.dom.appendChild(fiber.dom)
+  }
+​
+  const elements = fiber.props.children
+  let index = 0
+  let prevSibling = null
+​
+  while (index < elements.length) {
+    const element = elements[index]
+​
+    const newFiber = {
+      type: element.type,
+      props: element.props,
+      parent: fiber,
+      dom: null,
+    }
+
+    if (index === 0) {
+      fiber.child = newFiber
+    } else {
+      prevSibling.sibling = newFiber
+    }
+​
+    prevSibling = newFiber
+    index++
+  }
+
++  if (fiber.child) {
++    return fiber.child
++  }
++  let nextFiber = fiber
++  while (nextFiber) {
++    if (nextFiber.sibling) {
++      return nextFiber.sibling
++    }
++    nextFiber = nextFiber.parent
++  }
+}
+```
+
+4. 마지막으로 다음 작업 단위를 찾습니다. 먼저 child와 함께, 그다음에는 sibling과 함께, 그다음에는 uncle과 함께 하는 식으로 시도합니다.
+
+<details>
+<summary>
+  `performUnitOfWork` 전체 코드
+</summary>
+
+```js
+function performUnitOfWork(fiber) {
+  if (!fiber.dom) {
+    fiber.dom = createDom(fiber)
+  }
+​
+  if (fiber.parent) {
+    fiber.parent.dom.appendChild(fiber.dom)
+  }
+​
+  const elements = fiber.props.children
+  let index = 0
+  let prevSibling = null
+​
+  while (index < elements.length) {
+    const element = elements[index]
+​
+    const newFiber = {
+      type: element.type,
+      props: element.props,
+      parent: fiber,
+      dom: null,
+    }
+​
+    if (index === 0) {
+      fiber.child = newFiber
+    } else {
+      prevSibling.sibling = newFiber
+    }
+​
+    prevSibling = newFiber
+    index++
+  }
+​
+  if (fiber.child) {
+    return fiber.child
+  }
+  let nextFiber = fiber
+  while (nextFiber) {
+    if (nextFiber.sibling) {
+      return nextFiber.sibling
+    }
+    nextFiber = nextFiber.parent
+  }
+}
+```
+
+</details>
+
 ## STEP 5. Render와 Commit Phases
 
 ## STEP 6. Reconciliation
