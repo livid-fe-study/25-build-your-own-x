@@ -421,6 +421,69 @@ Didact.render(element, container)
 
 ## STEP 3. 동시성 모드
 
+하지만 코드를 더 추가하기 전에 리팩터링이 필요합니다.
+
+```js
+function render(element, container) {
+  const dom =
+    element.type == "TEXT_ELEMENT"
+      ? document.createTextNode("")
+      : document.createElement(element.type)
+​
+  const isProperty = key => key !== "children"
+  Object.keys(element.props)
+    .filter(isProperty)
+    .forEach(name => {
+      dom[name] = element.props[name]
+    })
+​
+  element.props.children.forEach(child =>
+    render(child, dom)
+  )
+​
+  container.appendChild(dom)
+}
+```
+
+이 재귀 호출에 문제가 있습니다. 렌더링을 시작하면 전체 트리 요소를 렌더링할 때까지 멈추지 않습니다. 요소 트리가 크면 메인 스레드를 너무 오래 차단할 수 있습니다. 또한 브라우저에서 사용자 입력을 처리하거나 애니메이션을 원활하게 유지하는 등 우선순위가 높은 작업을 수행해야 하는 경우 렌더링이 완료될 때까지 기다려야 합니다.
+
+따라서 작업을 자근 단위로 나누고 각 단위를 완료한 후 다른 작업이 필요한 경우 브라우저가 렌더링을 중단하도록 할 것입니다.
+
+```js
+let nextUnitOfWork = null
+​
+function workLoop(deadline) {
+  let shouldYield = false
+  while (nextUnitOfWork && !shouldYield) {
+    nextUnitOfWork = performUnitOfWork(
+      nextUnitOfWork
+    )
+    shouldYield = deadline.timeRemaining() < 1
+  }
+  requestIdleCallback(workLoop)
+}
+​
+requestIdleCallback(workLoop)
+​
+function performUnitOfWork(nextUnitOfWork) {
+  // TODO
+}
+```
+
+`requestIdleCallback`을 사용하여 루프를 만듭니다. `requestIdleCallback`을 `setTimeout`으로 생각할 수 있지만, 브라우저가 언제 실행할지 알려주는 대신 메인스레드가 유휴 상태(idle)일 때 콜백을 실행한다.
+
+React는 더이상 `requestIdleCallback`를 사용하지 않습니다. 이제 scheduler package를 사용합니다. 하지만 이 유즈케이스의 경우 개념적으로는 동일합니다.
+
+`requestIdleCallback`은 deadline 매개변수도 제공합니다. 이를 사용하여 브라우저가 다시 제어권을 가져올 때까지 남은 시간을 확인할 수 있습니다.
+
+```js
+while (nextUnitOfWork) {
+  nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+}
+```
+
+루프 사용을 시작하려면 첫 번째 작업 단위를 설정한 다음, 작업 수행 뿐만 아니라 다음 작업 단위도 반환하는 `performUnitOfWork` 함수를 작성해야 합니다.
+
 ## STEP 4. Fibers
 
 ## STEP 5. Render와 Commit Phases
