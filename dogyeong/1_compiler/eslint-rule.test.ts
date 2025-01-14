@@ -1,5 +1,5 @@
 import { RuleTester } from 'eslint'
-import { describe, expect, it } from 'vitest'
+import { describe, it } from 'vitest'
 import myRule from './eslint-rule'
 
 const ruleTester = new RuleTester({
@@ -8,22 +8,18 @@ const ruleTester = new RuleTester({
 
 describe('my-rule', () => {
   it('should pass', () => {
-      ruleTester.run(
-        'my-rule',
-        myRule,
+    ruleTester.run('my-rule', myRule, {
+      valid: [
         {
-          valid: [
-            {
-              code: "const bar = 'bar';",
-            },
-          ],
-          invalid: [
-            {
-              code: "const foo = 'baz';",
-              errors: 1,
-            },
-          ],
+          code: "const bar = 'bar';",
         },
-      )
+      ],
+      invalid: [
+        {
+          code: "const foo = 'baz';",
+          errors: 1,
+        },
+      ],
+    })
   })
 })
