@@ -1,4 +1,8 @@
-export function createElement(type, props?, ...children) {
+export function createElement(
+  type: string,
+  props?: Record<PropertyKey, unknown> | null,
+  ...children: unknown[]
+) {
   return {
     type,
     props: {
