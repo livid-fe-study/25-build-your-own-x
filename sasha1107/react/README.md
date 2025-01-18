@@ -1354,4 +1354,156 @@ codesandbox
 
 ## STEP 7. Function Components
 
+다음으로 추가해야 할 것은 함수 컴포넌트에 대한 지원입니다.
+
+함수 컴포넌트는 두 가지 점에서 다릅니다:
+
+- 함수 컴포넌트의 파이버에는 DOM 노드가 없다.
+- children은 props에서 직접 가져오는 것이 아니라 함수를 실행하여 가져옵니다.
+
+```diff
+function performUnitOfWork(fiber) {
+-  if (!fiber.dom) {
+-    fiber.dom = createDom(fiber)
+-  }
+-​
+-  const elements = fiber.props.children
+-  reconcileChildren(fiber, elements)
++  const isFunctionComponent =
++    fiber.type instanceof Function
++  if (isFunctionComponent) {
++    updateFunctionComponent(fiber)
++  } else {
++    updateHostComponent(fiber)
++  }
+
+  if (fiber.child) {
+    return fiber.child
+  }
+  let nextFiber = fiber
+  while (nextFiber) {
+    if (nextFiber.sibling) {
+      return nextFiber.sibling
+    }
+    nextFiber = nextFiber.parent
+  }
+}
+​
++function updateFunctionComponent(fiber) {
++  // TODO
++}
++​
++function updateHostComponent(fiber) {
++  if (!fiber.dom) {
++    fiber.dom = createDom(fiber)
++  }
++  reconcileChildren(fiber, fiber.props.children)
++}
+```
+
+fiber type이 함수인지 확인하고 그에 따라 업데이트 기능으로 이동합니다.
+
+`updateHostComponent`는 이전과 동일하게 수행합니다.
+
+```diff
+function updateFunctionComponent(fiber) {
+-  // TODO
++  const children = [fiber.type(fiber.props)]
++  reconcileChildren(fiber, children)
+}
+```
+
+그리고 `updateFunctionComponent`에서 함수를 실행하여 children을 가져옵니다.
+
+이 예제에서 `fiber.type`은 `App`함수 이며 이를 실행하면 `h1` 요소를 반환합니다.
+
+그런 다음 children이 생기면 동일한 방식으로 재조정이 이루어지므로 아무것도 변경할 필요가 없습니다.
+
+우리가 변경해야 하는 것은 `commitWork` 함수입니다.
+
+이제 DOM 노드가 없는 fiber가 있으므로 두 가지를 변경해야 합니다.
+
+```diff
+function commitWork(fiber) {
+  if (!fiber) {
+    return
+  }
+​
+-  const domParent = fiber.parent.dom
++  let domParentFiber = fiber.parent
++  while (!domParentFiber.dom) {
++    domParentFiber = domParentFiber.parent
++  }
++  const domParent = domParentFiber.dom
+
+  if (
+    fiber.effectTag === "PLACEMENT" &&
+    fiber.dom != null
+  ) {
+    domParent.appendChild(fiber.dom)
+  } else if (
+    fiber.effectTag === "UPDATE" &&
+    fiber.dom != null
+  ) {
+    updateDom(
+      fiber.dom,
+      fiber.alternate.props,
+      fiber.props
+    )
+  } else if (fiber.effectTag === "DELETION") {
+    domParent.removeChild(fiber.dom)
+  }
+​
+  commitWork(fiber.child)
+  commitWork(fiber.sibling)
+}
+```
+
+먼저 DOM 노드의 부모를 찾으려면 fiber tree를 따라 올라가서 DOM 노드가 있는 fiber를 찾아야 합니다.
+
+```diff
+function commitWork(fiber) {
+  if (!fiber) {
+    return
+  }
+​
+  let domParentFiber = fiber.parent
+  while (!domParentFiber.dom) {
+    domParentFiber = domParentFiber.parent
+  }
+  const domParent = domParentFiber.dom
+
+  if (
+    fiber.effectTag === "PLACEMENT" &&
+    fiber.dom != null
+  ) {
+    domParent.appendChild(fiber.dom)
+  } else if (
+    fiber.effectTag === "UPDATE" &&
+    fiber.dom != null
+  ) {
+    updateDom(
+      fiber.dom,
+      fiber.alternate.props,
+      fiber.props
+    )
+  } else if (fiber.effectTag === "DELETION") {
+-    domParent.removeChild(fiber.dom)
++    commitDeletion(fiber, domParent)
+  }
+​
+  commitWork(fiber.child)
+  commitWork(fiber.sibling)
+}
++function commitDeletion(fiber, domParent) {
++  if (fiber.dom) {
++    domParent.removeChild(fiber.dom)
++  } else {
++    commitDeletion(fiber.child, domParent)
++  }
++}
+```
+
+또한 노드를 제거할 때 DOM 노드가 있는 자식을 찾을 때까지 계속 진행해야 합니다.
+
 ## STEP 8. Hooks
