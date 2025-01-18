@@ -1,12 +1,10 @@
-import { Didact } from "./didact";
+import { Didact } from './didact.ts'
 
 /** @jsx Didact.createElement */
-const element = (
-  <div style="background: salmon">
-    <h1>Hello World</h1>
-    <h2 style="text-align:right">from Didact</h2>
-  </div>
-);
-
-const container = document.getElementById("root")!;
-Didact.render(element, container);
+function Counter() {
+  const [state, setState] = Didact.useState(1)
+  return <h1 onClick={() => setState((c) => c + 1)}>Count: {state}</h1>
+}
+const element = <Counter />
+const container = document.getElementById('root')
+Didact.render(element, container)
