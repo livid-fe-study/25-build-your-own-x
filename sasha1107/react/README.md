@@ -1507,3 +1507,146 @@ function commitWork(fiber) {
 또한 노드를 제거할 때 DOM 노드가 있는 자식을 찾을 때까지 계속 진행해야 합니다.
 
 ## STEP 8. Hooks
+
+마지막 단계입니다. 이제 함수 컴포넌트가 생겼으니 state도 추가해보겠습니다.
+
+```diff
+const Didact = {
+  createElement,
+  render,
++  useState,
+}
+​
+/** @jsx Didact.createElement */
+-function App(props) {
+-  return <h1>Hi {props.name}</h1>
++function Counter() {
++  const [state, setState] = Didact.useState(1)
++  return (
++    <h1 onClick={() => setState(c => c + 1)}>
++      Count: {state}
++    </h1>
++  )
+}
+-const element = <App name="foo" />
++const element = <Counter />
+const container = document.getElementById("root")
+Didact.render(element, container)
+```
+
+예제를 고전적인 카운터 컴포넌트로 변경해 보겠습니다. 클릭할 때마다 상태가 하나씩 증가합니다. 카운터 값을 가져오고 업데이트하기 위해 Didact.useState를 사용하고 있다는 점에 유의하세요.
+
+함수 컴포넌트를 호출하기 전에 일부 전역 변수를 초기화해야 useState 함수 내에서 사용할 수 있습니다.
+
+```diff
++let wipFiber = null
++let hookIndex = null
+​
+function updateFunctionComponent(fiber) {
++  wipFiber = fiber
++  hookIndex = 0
++  wipFiber.hooks = []
+  const children = [fiber.type(fiber.props)]
+  reconcileChildren(fiber, children)
+}
+​
+function useState(initial) {
+  // TODO
+}
+```
+
+먼저 progress fiber를 설정합니다. 또한 fiber에 `hooks` 배열을 추가하여 동일한 컴포넌트 내에서 `useState`를 여러번 호출할 수 있도록 지원합니다. 그리고 현재 hook index를 추적합니다.
+
+```diff
+function useState(initial) {
+-  // TODO
++  const oldHook =
++    wipFiber.alternate &&
++    wipFiber.alternate.hooks &&
++    wipFiber.alternate.hooks[hookIndex]
++  const hook = {
++    state: oldHook ? oldHook.state : initial,
++  }
++​
++  wipFiber.hooks.push(hook)
++  hookIndex++
++  return [hook.state]
+}
+```
+
+함수 컴포넌트가 `useState`를 호출할 때, 이전 hook이 있는지 확인합니다. hook index를 사용하여 fiber의 `alternate`를 확인합니다.
+
+이전 훅이 있으면 이전 훅에서 새 훅으로 상태를 복사하고, 그렇지 않으면 상태를 초기화합니다.
+
+그런 다음 새 훅을 fiber에 추가하고 훅 인덱스를 1씩 증가시킨 다음 상태를 반환합니다.
+
+```diff
+function useState(initial) {
+  const oldHook =
+    wipFiber.alternate &&
+    wipFiber.alternate.hooks &&
+    wipFiber.alternate.hooks[hookIndex]
+  const hook = {
+    state: oldHook ? oldHook.state : initial,
++    queue: [],
+  }
++  const setState = action => {
++    hook.queue.push(action)
++    wipRoot = {
++      dom: currentRoot.dom,
++      props: currentRoot.props,
++      alternate: currentRoot,
++    }
++    nextUnitOfWork = wipRoot
++    deletions = []
++  }
+​
+  wipFiber.hooks.push(hook)
+  hookIndex++
+-  return [hook.state]
++  return [hook.state, setState]
+}
+```
+
+`useState`는 상태를 업데이트하는 함수도 반환해야 하므로 액션을 수신하는 `setState` 함수를 정의합니다.
+
+해당 액션을 hook에 추가한 큐로 푸시합니다.
+
+그런 다음 `render` 함수에서 수행한 것과 유사한 작업을 수행하여 새 work in progress root를 다음 `nextUnitOfWork` 으로 설정하여작업 루프가 새 render phase를 시작할 수 있도록 합니다.
+
+하지만, 아직 액션을 실행하지 않았습니다.
+
+다음에 컴포넌트를 렌더링할 때 이전 hook queue에서 모든 액션을 가져온 다음 새 hook state에 하나씩 적용하므로 상태를 반환할 때 업데이트됩니다.
+
+```diff
+function useState(initial) {
+  const oldHook =
+    wipFiber.alternate &&
+    wipFiber.alternate.hooks &&
+    wipFiber.alternate.hooks[hookIndex]
+  const hook = {
+    state: oldHook ? oldHook.state : initial,
+    queue: [],
+  }
+
++  const actions = oldHook ? oldHook.queue : []
++  actions.forEach(action => {
++    hook.state = action(hook.state)
++  })
+
+  const setState = action => {
+    hook.queue.push(action)
+    wipRoot = {
+      dom: currentRoot.dom,
+      props: currentRoot.props,
+      alternate: currentRoot,
+    }
+    nextUnitOfWork = wipRoot
+    deletions = []
+  }
+​
+  wipFiber.hooks.push(hook)
+  hookIndex++
+  return [hook.state, setState]
+}
+```
