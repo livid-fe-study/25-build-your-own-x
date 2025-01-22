@@ -1354,4 +1354,299 @@ codesandbox
 
 ## STEP 7. Function Components
 
+다음으로 추가해야 할 것은 함수 컴포넌트에 대한 지원입니다.
+
+함수 컴포넌트는 두 가지 점에서 다릅니다:
+
+- 함수 컴포넌트의 파이버에는 DOM 노드가 없다.
+- children은 props에서 직접 가져오는 것이 아니라 함수를 실행하여 가져옵니다.
+
+```diff
+function performUnitOfWork(fiber) {
+-  if (!fiber.dom) {
+-    fiber.dom = createDom(fiber)
+-  }
+-​
+-  const elements = fiber.props.children
+-  reconcileChildren(fiber, elements)
++  const isFunctionComponent =
++    fiber.type instanceof Function
++  if (isFunctionComponent) {
++    updateFunctionComponent(fiber)
++  } else {
++    updateHostComponent(fiber)
++  }
+
+  if (fiber.child) {
+    return fiber.child
+  }
+  let nextFiber = fiber
+  while (nextFiber) {
+    if (nextFiber.sibling) {
+      return nextFiber.sibling
+    }
+    nextFiber = nextFiber.parent
+  }
+}
+​
++function updateFunctionComponent(fiber) {
++  // TODO
++}
++​
++function updateHostComponent(fiber) {
++  if (!fiber.dom) {
++    fiber.dom = createDom(fiber)
++  }
++  reconcileChildren(fiber, fiber.props.children)
++}
+```
+
+fiber type이 함수인지 확인하고 그에 따라 업데이트 기능으로 이동합니다.
+
+`updateHostComponent`는 이전과 동일하게 수행합니다.
+
+```diff
+function updateFunctionComponent(fiber) {
+-  // TODO
++  const children = [fiber.type(fiber.props)]
++  reconcileChildren(fiber, children)
+}
+```
+
+그리고 `updateFunctionComponent`에서 함수를 실행하여 children을 가져옵니다.
+
+이 예제에서 `fiber.type`은 `App`함수 이며 이를 실행하면 `h1` 요소를 반환합니다.
+
+그런 다음 children이 생기면 동일한 방식으로 재조정이 이루어지므로 아무것도 변경할 필요가 없습니다.
+
+우리가 변경해야 하는 것은 `commitWork` 함수입니다.
+
+이제 DOM 노드가 없는 fiber가 있으므로 두 가지를 변경해야 합니다.
+
+```diff
+function commitWork(fiber) {
+  if (!fiber) {
+    return
+  }
+​
+-  const domParent = fiber.parent.dom
++  let domParentFiber = fiber.parent
++  while (!domParentFiber.dom) {
++    domParentFiber = domParentFiber.parent
++  }
++  const domParent = domParentFiber.dom
+
+  if (
+    fiber.effectTag === "PLACEMENT" &&
+    fiber.dom != null
+  ) {
+    domParent.appendChild(fiber.dom)
+  } else if (
+    fiber.effectTag === "UPDATE" &&
+    fiber.dom != null
+  ) {
+    updateDom(
+      fiber.dom,
+      fiber.alternate.props,
+      fiber.props
+    )
+  } else if (fiber.effectTag === "DELETION") {
+    domParent.removeChild(fiber.dom)
+  }
+​
+  commitWork(fiber.child)
+  commitWork(fiber.sibling)
+}
+```
+
+먼저 DOM 노드의 부모를 찾으려면 fiber tree를 따라 올라가서 DOM 노드가 있는 fiber를 찾아야 합니다.
+
+```diff
+function commitWork(fiber) {
+  if (!fiber) {
+    return
+  }
+​
+  let domParentFiber = fiber.parent
+  while (!domParentFiber.dom) {
+    domParentFiber = domParentFiber.parent
+  }
+  const domParent = domParentFiber.dom
+
+  if (
+    fiber.effectTag === "PLACEMENT" &&
+    fiber.dom != null
+  ) {
+    domParent.appendChild(fiber.dom)
+  } else if (
+    fiber.effectTag === "UPDATE" &&
+    fiber.dom != null
+  ) {
+    updateDom(
+      fiber.dom,
+      fiber.alternate.props,
+      fiber.props
+    )
+  } else if (fiber.effectTag === "DELETION") {
+-    domParent.removeChild(fiber.dom)
++    commitDeletion(fiber, domParent)
+  }
+​
+  commitWork(fiber.child)
+  commitWork(fiber.sibling)
+}
++function commitDeletion(fiber, domParent) {
++  if (fiber.dom) {
++    domParent.removeChild(fiber.dom)
++  } else {
++    commitDeletion(fiber.child, domParent)
++  }
++}
+```
+
+또한 노드를 제거할 때 DOM 노드가 있는 자식을 찾을 때까지 계속 진행해야 합니다.
+
 ## STEP 8. Hooks
+
+마지막 단계입니다. 이제 함수 컴포넌트가 생겼으니 state도 추가해보겠습니다.
+
+```diff
+const Didact = {
+  createElement,
+  render,
++  useState,
+}
+​
+/** @jsx Didact.createElement */
+-function App(props) {
+-  return <h1>Hi {props.name}</h1>
++function Counter() {
++  const [state, setState] = Didact.useState(1)
++  return (
++    <h1 onClick={() => setState(c => c + 1)}>
++      Count: {state}
++    </h1>
++  )
+}
+-const element = <App name="foo" />
++const element = <Counter />
+const container = document.getElementById("root")
+Didact.render(element, container)
+```
+
+예제를 고전적인 카운터 컴포넌트로 변경해 보겠습니다. 클릭할 때마다 상태가 하나씩 증가합니다. 카운터 값을 가져오고 업데이트하기 위해 Didact.useState를 사용하고 있다는 점에 유의하세요.
+
+함수 컴포넌트를 호출하기 전에 일부 전역 변수를 초기화해야 useState 함수 내에서 사용할 수 있습니다.
+
+```diff
++let wipFiber = null
++let hookIndex = null
+​
+function updateFunctionComponent(fiber) {
++  wipFiber = fiber
++  hookIndex = 0
++  wipFiber.hooks = []
+  const children = [fiber.type(fiber.props)]
+  reconcileChildren(fiber, children)
+}
+​
+function useState(initial) {
+  // TODO
+}
+```
+
+먼저 progress fiber를 설정합니다. 또한 fiber에 `hooks` 배열을 추가하여 동일한 컴포넌트 내에서 `useState`를 여러번 호출할 수 있도록 지원합니다. 그리고 현재 hook index를 추적합니다.
+
+```diff
+function useState(initial) {
+-  // TODO
++  const oldHook =
++    wipFiber.alternate &&
++    wipFiber.alternate.hooks &&
++    wipFiber.alternate.hooks[hookIndex]
++  const hook = {
++    state: oldHook ? oldHook.state : initial,
++  }
++​
++  wipFiber.hooks.push(hook)
++  hookIndex++
++  return [hook.state]
+}
+```
+
+함수 컴포넌트가 `useState`를 호출할 때, 이전 hook이 있는지 확인합니다. hook index를 사용하여 fiber의 `alternate`를 확인합니다.
+
+이전 훅이 있으면 이전 훅에서 새 훅으로 상태를 복사하고, 그렇지 않으면 상태를 초기화합니다.
+
+그런 다음 새 훅을 fiber에 추가하고 훅 인덱스를 1씩 증가시킨 다음 상태를 반환합니다.
+
+```diff
+function useState(initial) {
+  const oldHook =
+    wipFiber.alternate &&
+    wipFiber.alternate.hooks &&
+    wipFiber.alternate.hooks[hookIndex]
+  const hook = {
+    state: oldHook ? oldHook.state : initial,
++    queue: [],
+  }
++  const setState = action => {
++    hook.queue.push(action)
++    wipRoot = {
++      dom: currentRoot.dom,
++      props: currentRoot.props,
++      alternate: currentRoot,
++    }
++    nextUnitOfWork = wipRoot
++    deletions = []
++  }
+​
+  wipFiber.hooks.push(hook)
+  hookIndex++
+-  return [hook.state]
++  return [hook.state, setState]
+}
+```
+
+`useState`는 상태를 업데이트하는 함수도 반환해야 하므로 액션을 수신하는 `setState` 함수를 정의합니다.
+
+해당 액션을 hook에 추가한 큐로 푸시합니다.
+
+그런 다음 `render` 함수에서 수행한 것과 유사한 작업을 수행하여 새 work in progress root를 다음 `nextUnitOfWork` 으로 설정하여작업 루프가 새 render phase를 시작할 수 있도록 합니다.
+
+하지만, 아직 액션을 실행하지 않았습니다.
+
+다음에 컴포넌트를 렌더링할 때 이전 hook queue에서 모든 액션을 가져온 다음 새 hook state에 하나씩 적용하므로 상태를 반환할 때 업데이트됩니다.
+
+```diff
+function useState(initial) {
+  const oldHook =
+    wipFiber.alternate &&
+    wipFiber.alternate.hooks &&
+    wipFiber.alternate.hooks[hookIndex]
+  const hook = {
+    state: oldHook ? oldHook.state : initial,
+    queue: [],
+  }
+
++  const actions = oldHook ? oldHook.queue : []
++  actions.forEach(action => {
++    hook.state = action(hook.state)
++  })
+
+  const setState = action => {
+    hook.queue.push(action)
+    wipRoot = {
+      dom: currentRoot.dom,
+      props: currentRoot.props,
+      alternate: currentRoot,
+    }
+    nextUnitOfWork = wipRoot
+    deletions = []
+  }
+​
+  wipFiber.hooks.push(hook)
+  hookIndex++
+  return [hook.state, setState]
+}
+```
