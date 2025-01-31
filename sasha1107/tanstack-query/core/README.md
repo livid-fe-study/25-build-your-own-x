@@ -117,3 +117,114 @@ new QueryClient({ cache: customCache });
 
    - 객체 스프레드 사용으로 새 객체 생성
    - 사이드 이펙트 최소화
+
+## QueryCache
+
+QueryCache는 메모리에 Query를 캐싱하는 역할을 담당합니다. Map 객체 기반으로 구현되어 있으며, queryKey 값을 해싱하여 key로 활용합니다.
+
+- **key**: Query의 queryKey 값을 기반으로 해싱된 값을 사용합니다. 해싱함수는 JSON.stringify 기반의 [hashKey](./tanstack-query-lite/core/util.js#L2) 함수를 사용합니다.
+- **value**: Query
+
+> QueryCache 어떤 메소드로 Query를 추가하나요?
+
+build 메소드를 기반으로 Query를 추가합니다. 만약 queryKey 값에 해당하는 Query가 이미 존재한다면, 캐싱되어 있는 Query를 반환하여 불필요한 Query 객체의 인스턴스 생성을 방지합니다.
+
+### 1. 저장소 초기화
+
+```js
+constructor() {
+this.queries = new Map(); // Map<queryHash, Query>
+}
+```
+
+| 항목        | 설명               | 자료구조 특징              |
+| ----------- | ------------------ | -------------------------- |
+| `Map`       | 쿼리 저장 컨테이너 | Key-Value 쌍 관리          |
+| `queryHash` | 고유 식별자        | `hashKey(queryKey)`로 생성 |
+
+### 2. 핵심 메서드
+
+#### 🔍 `get()` - 쿼리 조회
+
+```js
+get = (queryHash) => {
+  return this.queries.get(queryHash); // O(1) 조회
+};
+```
+
+- **동작**: 해시 기반 직접 접근
+- **사용 예시**: 캐시 히트 확인
+
+#### 🛠️ `build()` - 쿼리 생성/반환
+
+```js
+build(client, options) {
+  const queryKey = options.queryKey;
+  const queryHash = hashKey(queryKey);
+
+  let query = this.get(queryHash);
+
+  if (!query) {
+    query = new Query({
+      cache: this,
+      queryKey,
+      queryHash,
+      options: client.defaultQueryOptions(options)
+    });
+
+    this.queries.set(query.queryHash, query);
+  }
+
+  return query;
+}
+
+remove = (query) => {
+  this.queries.delete(query.queryHash);
+};
+```
+
+**작동 순서**:
+
+1. 쿼리 키 → 해시 변환
+2. 기존 캐시 확인
+3. 캐시 미존재 시 새 Query 생성
+4. 옵션 병합(`client.defaultQueryOptions()`)
+5. 캐시 등록
+
+#### 🗑️ `remove()` - 쿼리 삭제
+
+```js
+remove = (query) => {
+  this.queries.delete(query.queryHash);
+};
+```
+
+- **목적**: 명시적 캐시 무효화
+- **사용 시점**: 데이터 업데이트/에러 발생 시
+
+### 🎯 설계 패턴
+
+#### 1. 해시 기반 캐싱
+
+```js
+const queryHash = hashKey(queryKey);
+```
+
+- **장점**: 복잡한 객체도 단순 문자열로 관리
+- **전형적 사용처**: 상태 관리 라이브러리(React Query 등)
+
+#### 2. 지연 생성(Lazy Loading)
+
+```js
+if (!query) {
+  /* 새 인스턴스 생성 */
+}
+```
+
+- **최적화**: 실제 사용 시점에 인스턴스 생성
+- **효과**: 불필요한 메모리 사용 방지
+
+#### 3. 옵션 병합 구조
+
+- 사용자 옵션 → 클라이언트 기본값 → 글로벌 기본값
+- **우선순위**: 구체적 설정이 일반 설정을 덮어씀

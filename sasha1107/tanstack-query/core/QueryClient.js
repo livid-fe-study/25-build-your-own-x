@@ -1,4 +1,6 @@
-class QueryClient {
+import { QueryCache } from "./QueryCache";
+
+export class QueryClient {
   cache;
 
   constructor(config) {
