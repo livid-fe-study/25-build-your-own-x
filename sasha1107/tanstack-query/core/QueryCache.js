@@ -1,3 +1,4 @@
+import { Query } from "./Query";
 import { hashKey } from "./util";
 
 export class QueryCache {
