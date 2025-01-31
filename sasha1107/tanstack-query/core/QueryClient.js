@@ -1,4 +1,5 @@
 import { QueryCache } from "./QueryCache";
+import { hashKey } from "./util";
 
 export class QueryClient {
   cache;
