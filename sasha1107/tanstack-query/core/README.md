@@ -570,3 +570,48 @@ flowchart TD
 
 - 불필요한 네트워크 요청 방지 (staleTime 기반)
 - 메모리 누수 방지를 위한 구독 해제 메커니즘
+
+---
+
+# Step 2: React에서 core 로직 적용하기
+
+React에서 core 로직을 사용하는 경우, Query의 상태가 변경될 때 컴포넌트의 다시 렌더링을 발생시켜야 합니다. 아쉽게도 core 로직은 React로 작성된 코드가 아닙니다. Query의 상태가 변경되더라도 다시 렌더링이 발생하지는 않습니다.
+
+## Query 상태가 변경될 떄 다시 렌더링을 발생시키기
+
+React는 외부 상태를 구독할 수 있는 `useSyncExternalStore` 커스텀 Hook을 제공하고 있습니다. 외부 상태 변경을 구독할 수 있으며, 상태 값이 변경될 때 마다 다시 렌더링이 발생됩니다.
+
+`QueryObserver`를 `useSyncExternalStore`와 연동하면 Query의 최신 상태를 구독할 수 있고, Query 상태가 변경될 때 마다 다시 렌더링을 발생시킬 수 있습니다. 코드로 간단히 구현해보면 아래와 같습니다.
+
+```js
+const useQuery = () => {
+  const [queryObserver] = useState(() => new QueryObserver());
+
+  useSyncExternalStore(
+    // subscribe
+    useCallback((onStoreChange) => {
+      // Query 객체를 생성하고, Query 객체의 상태가 변경될 때 onStoreChange 함수를 호출한다.
+      const unsubscribe = queryObserver.subscribe(onStoreChange);
+
+      return unsubscribe;
+    }, []),
+    // onStoreChange 함수가 호출될 때 Object.is로 이전 값과 최신 값을 비교하여, 다시 렌더링을 발생시킨다.
+    () => queryObserver.getResult()
+  );
+
+  return queryObserver.getResult();
+};
+```
+
+Query의 상태가 변경되고 다시 렌더링이 발생하는 흐름을 정리해 보면 아래와 같습니다.
+
+1. QueryObserver를 생성합니다.
+   - (1-1) Query를 생성합니다. (캐시된 Query 값이 있는 경우 생략합니다.)
+   - (1-2) Query에 QueryObserver를 구독합니다. 구독할 때 notify 멤버 변수가 useSyncExternalStore의 onStoreChange로 할당됩니다.
+   - (1-3) Query에게 fetch 메소드를 요청합니다. (staleTime에 따라서 fetch 메소드가 실행되지 않을 수 있습니다.)
+2. Query에서 fetch 함수가 종료된 후 서버 상태를 변경합니다.
+3. Query는 구독되어 있는 QueryObserver의 notify를 실행합니다.
+   - (3-1) useSyncExternalStore의 onStoreChange가 실행합니다.
+   - (3-2) QueryObserver는 getResult 함수를 통해 최신 상태를 반환하고 다시 렌더링을 발생시킵니다.
+
+이제 core 로직을 React에서 활용할 수 있는 방법을 조금 더 알아보려고 합니다.
