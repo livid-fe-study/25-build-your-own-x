@@ -740,3 +740,101 @@ export const QueryClientProvider = ({ children, client }) => {
 - 의존성 주입: 쿼리 클라이언트의 중앙 집중식 관리
 - 이벤트 기반 캐시 관리: 사용자 상호작용에 따른 자동 데이터 갱신
 - 에러 방지: Context 미설치 시 개발 단계에서 바로 오류 감지
+
+## useQuery
+
+useQuery는 QueryObserver를 이용하여 서버 상태를 관리하는 커스텀 Hook입니다.
+
+QueryObserver 생성 및 useSyncExternalStore 처리 로직은 useBaseQuery에 작성되어 있습니다. useQuery는 단순히 useBaseQuery의 실행값을 반환합니다.
+
+```js
+import { useCallback, useState, useSyncExternalStore } from "react";
+import QueryObserver from "../core/QueryObserver";
+import { useQueryClient } from "./QueryClientProvider";
+
+const useBaseQuery = (options, Observer, queryClient) => {
+  const client = useQueryClient(queryClient);
+
+  const [observer] = useState(() => {
+    const defaultOptions = client.defaultQueryOptions(options);
+    return new Observer(client, defaultOptions);
+  });
+
+  const subscribe = useCallback(
+    (onStoreChange) => {
+      // Query 객체의 상태가 변경될 때 onStoreChange 메소드가 호출됩니다.
+      const unsubscribe = observer.subscribe(onStoreChange);
+      return unsubscribe;
+    },
+    [observer]
+  );
+
+  const getSnapshot = useCallback(() => {
+    // Object.is 를 기반으로 다시 렌더링 여부를 판단합니다.
+    return observer.getResult();
+  }, [observer]);
+
+  // core 로직과 React를 연결합니다.
+  useSyncExternalStore(subscribe, getSnapshot);
+
+  return observer.getResult();
+};
+
+const useQuery = (options, queryClient) => {
+  return useBaseQuery(options, QueryObserver, queryClient);
+};
+
+export default useQuery;
+```
+
+### 핵심 메커니즘
+
+1. 상태 관리 아키텍처
+
+   - `QueryObserver`를 통해 쿼리 상태(로딩, 에러, 데이터) 관찰
+   - `useSyncExternalStore`로 외부 저장소와 React 상태 동기화
+   - `Object.is` 비교를 통한 효율적인 리렌더링 제어
+
+2. 주요 훅 구성
+
+```js
+const useBaseQuery = (options, Observer, queryClient) => {
+  const client = useQueryClient(queryClient); // 쿼리 클라이언트 초기화
+  const [observer] = useState(() => new Observer(client, options)); // 옵저버 생성
+  const subscribe = useCallback((onStoreChange) => ... , [observer]); // 상태 변경 구독
+  const getSnapshot = useCallback(() => observer.getResult(), [observer]); // 현재 상태 스냅샷
+
+  useSyncExternalStore(subscribe, getSnapshot); // React와 외부 저장소 연결
+  return observer.getResult();
+};
+
+```
+
+### 동작 흐름
+
+1. 초기화 단계
+
+   - `QueryClient` 인스턴스 획득
+   - 기본 옵션과 사용자 옵션 병합
+   - QueryObserver` 인스턴스 생성
+
+2. 상태 관찰 시스템
+
+```js
+observer.subscribe(onStoreChange); // 상태 변경 시 리렌더링 트리거
+observer.getResult(); // { data, error, status } 반환
+```
+
+### 설계 특징
+
+1. 관심사 분리
+
+- `QueryObserver`: 데이터 페칭 및 상태 관리
+- `useBaseQuery`: React 생명주기 연결
+- `QueryClient`: 전역 설정 및 캐시 관리
+
+2. 최적화 기법
+
+- `useCallback`으로 함수 메모이제이션
+- 상태 변경 시 얕은 비교(Shallow Comparison) 수행
+- 옵저버 패턴을 통한 효율적인 이벤트 구독
