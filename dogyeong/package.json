@@ -6,7 +6,7 @@
   "scripts": {
     "test": "vitest",
     "lint": "yarn biome check --write --unsafe .",
-    "transpile-react": "rm -rf dist && npx babel 2_react  --out-dir dist --extensions .ts,.tsx --config-file ./2_react/babel.config.json"
+    "transpile-react": "rm -rf dist && npx babel 2_react  --out-dir dist --extensions .js,.jsx --config-file ./2_react/babel.config.json"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
