@@ -1,3 +1,5 @@
+# Step 1: core 로직 구현하기
+
 ## QueryClient
 
 `QueryClient`는 `QueryCache`를 의존하며, 데이터 패칭 및 캐시 무효화와 같은 기능을 제공합니다. 예를 들어 데이터 패칭은 `Query`에 구현되어 있습니다.
@@ -422,3 +424,149 @@ fetch = () => {
 ↓
 [Query] → state 변경 → 모든 Observers
 ```
+
+## QueryObserver
+
+QueryObserver는 Query 구독합니다. queryKey 값을 기반으로 Query를 직접적으로 의존할 수 있으며, Query의 상태가 변경될 때 마다 이벤트를 발행받아 notify 메소드를 실행시킵니다.
+
+QueryObserver는 Query와 동일하게 옵저버 패턴을 기반으로 구독을 허용하고 있습니다. 구독이 발생할 때 Query의 fetch 메소드를 실행하여 최신 서버 상태를 조회하도록 요청합니다.
+
+```js
+const noop = () => {};
+
+class QueryObserver {
+  client;
+  options;
+  notify = noop;
+
+  constructor(client, options) {
+    this.client = client;
+    this.options = options;
+  }
+
+  getQuery = () => {
+    // options의 queryKey 값을 기반으로 구독되어 있는 Query를 조회합니다.
+    const query = this.client.getQueryCache().build(this.client, this.options);
+
+    return query;
+  };
+
+  getResult = () => {
+    // Query 객체에서 관리하고 있는 서버 상태를 조회합니다.
+    return this.getQuery().state;
+  };
+
+  subscribe = (callback) => {
+    // Query 객체의 서버 상태가 변경될 때 호출이 필요한 callback 함수를 notify 멤버 변수로 저장합니다.
+    this.notify = callback;
+
+    const query = this.getQuery();
+
+    const { lastUpdated } = query.state;
+    const { staleTime } = this.options;
+
+    const needsToFetch = !lastUpdated || Date.now() - lastUpdated > staleTime;
+
+    const unsubscribeQuery = query.subscribe(this);
+
+    if (needsToFetch) {
+      query.fetch();
+    }
+
+    const unsubscribe = () => {
+      unsubscribeQuery();
+      this.notify = noop;
+    };
+
+    return unsubscribe;
+  };
+}
+
+export default QueryObserver;
+```
+
+### 클래스 구조와 핵심 기능
+
+#### 1. 초기화 및 의존성 주입
+
+- `client`와 `options`를 생성자 주입 방식으로 받음
+- `notify` 콜백 함수는 초기값으로 빈 함수(noop) 할당
+
+#### 2. 쿼리 상태 관리
+
+```js
+getQuery() {
+  // options의 queryKey 값을 기반으로 구독되어 있는 Query를 조회합니다.
+  const query = this.client.getQueryCache().build(this.client, this.options);
+
+    return query;
+}
+```
+
+- 클라이언트의 쿼리 캐시에서 옵션 기반 쿼리 객체 생성
+- 쿼리 키(queryKey)를 기반으로 캐시 관리
+
+#### 3. 상태 조회 기능
+
+```js
+getResult = () => {
+  // Query 객체에서 관리하고 있는 서버 상태를 조회합니다.
+  return this.getQuery().state;
+};
+```
+
+- 현재 쿼리의 상태 객체 반환 (데이터, 로딩, 에러 상태 포함)
+
+### 구독 매커니즘
+
+#### 4. 동적 데이터 패칭
+
+```js
+const needsToFetch = !lastUpdated || Date.now() - lastUpdated > staleTime;
+```
+
+- `staleTime` 옵션으로 유효 기간 관리
+- `lastUpdated` 타임스탬프 기반 데이터 신선도 판단
+
+#### 5. 이벤트 구독 시스템
+
+- 콜백 함수를 구독자에게 등록 (`this.notify = callback`)
+
+  ```js
+  // Query 객체의 서버 상태가 변경될 때 호출이 필요한 callback 함수를 notify 멤버 변수로 저장합니다.
+  this.notify = callback;
+  ```
+
+- 쿼리 객체의 상태 변경 시 콜백 호출
+- 구독 해제 기능 제공 (`unsubscribe` 반환)
+
+### 동작 흐름
+
+```mermaid
+flowchart TD
+    A[subscribe 호출] --> B[쿼리 객체 생성]
+    B --> C{데이터 신선도 판단}
+    C -->|신선하지 않음| D[쿼리 실행]
+    C -->|신선함| E[기존 데이터 사용]
+    D --> F[상태 업데이트]
+    E --> F
+    F --> G[구독자에게 알림]
+```
+
+### 주요 설계 특징
+
+1. 캡슐화 원칙
+
+- 내부 캐시 시스템을 클라이언트에 숨김
+- 상태 관리를 쿼리 객체에 위임
+
+2. 옵저버 패턴 적용
+
+- Pub/Sub 모델로 효율적인 상태 변화 감지
+  - Pub/Sub(발행-구독) 모델은 분산 시스템에서 비동기 통신을 구현하기 위한 메시징 패턴으로, **발행자(Publishers)**와 **구독자(Subscribers)**를 중개자(메시지 브로커)를 통해 분리하는 구조입니다. 이 모델은 실시간 데이터 스트리밍, 이벤트 기반 아키텍처, 대규모 확장성이 필요한 시스템에서 널리 활용됩니다.a
+- 다중 구독자 지원 가능한 구조
+
+3.  성능 최적화
+
+- 불필요한 네트워크 요청 방지 (staleTime 기반)
+- 메모리 누수 방지를 위한 구독 해제 메커니즘
