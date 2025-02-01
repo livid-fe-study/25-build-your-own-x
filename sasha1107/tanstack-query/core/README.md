@@ -615,3 +615,128 @@ Query의 상태가 변경되고 다시 렌더링이 발생하는 흐름을 정�
    - (3-2) QueryObserver는 getResult 함수를 통해 최신 상태를 반환하고 다시 렌더링을 발생시킵니다.
 
 이제 core 로직을 React에서 활용할 수 있는 방법을 조금 더 알아보려고 합니다.
+
+## QueryClientProvider
+
+QueryClient는 전역으로 접근할 수 있습니다. Context를 이용하여 QueryClient를 전역으로 접근할 수 있도록 Provider와 커스텀 Hook을 작성해봅니다.
+
+```js
+export const QueryClientContext = createContext(null);
+
+export const QueryClientProvider = ({ client, children }) => {
+  return (
+    <QueryClientContext.Provider value={client}>
+      {children}
+    </QueryClientContext.Provider>
+  );
+};
+
+export const useQueryClient = (queryClient) => {
+  const client = useContext(QueryClientContext);
+
+  if (queryClient) {
+    return queryClient;
+  }
+
+  if (!client) {
+    throw new Error("No QueryClient set, use QueryClientProvider to set one");
+  }
+
+  return client;
+};
+```
+
+최상위 컴포넌트에서 QueryClientProvider를 선언하면, 전역에서 QueryClient를 접근할 수 있습니다.
+
+```jsx
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1_000,
+      gcTime: 1_000 * 60,
+    },
+  },
+});
+
+// 최상위 컴포넌트
+const App = ({ children }) => {
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+};
+```
+
+### 1. Context 생성 (QueryClientContext)
+
+```jsx
+export const QueryClientContext = createContext(null);
+```
+
+- 쿼리 클라이언트 인스턴스를 저장할 React Context 생성
+- 전역 상태 관리 목적: 컴포넌트 트리 전체에서 쿼리 클라이언트 접근 가능
+
+### 2. 커스텀 훅 (useQueryClient)
+
+```js
+export const useQueryClient = (queryClient) => {
+  const client = useContext(QueryClientContext);
+
+  // 명시적 client 제공 시 우선 사용
+  if (queryClient) return queryClient;
+
+  // Context 미등록 시 에러 발생
+  if (!client) throw Error("No QueryClient set...");
+
+  return client;
+};
+```
+
+**동작 로직**
+
+- 우선순위 체크: 파라미터로 전달된 queryClient가 있으면 즉시 반환
+- 컨텍스트 체크: Context에서 클라이언트 조회 시도
+- 에러 핸들링: 클라이언트가 없으면 오류 발생시킴
+
+### 3. Provider 컴포넌트 (QueryClientProvider)
+
+```jsx
+export const QueryClientProvider = ({ children, client }) => {
+  useEffect(() => {
+    const cache = client.getQueryCache();
+
+    // 윈도우 포커스 이벤트 핸들러
+    const onFocus = () => cache.onFocus();
+
+    // 이벤트 리스너 등록
+    window.addEventListener("visibilitychange", onFocus);
+    window.addEventListener("focus", onFocus);
+
+    // 클린업 함수
+    return () => {
+      window.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [client]);
+
+  return (
+    <QueryClientContext.Provider value={client}>
+      {children}
+    </QueryClientContext.Provider>
+  );
+};
+```
+
+**핵심 기능**
+
+- 자동 리페칭 설정
+  - 브라우저 탭 전환/포커스 시 `cache.onFocus()` 호출
+  - 데이터 신선도(stale) 유지를 위한 자동 재요청 트리거
+- 컨텍스트 프로바이더
+  - `client` 인스턴스를 전체 컴포넌트 트리에 제공
+  - `useQueryClient` 훅을 통해 하위 컴포넌트에서 접근 가능
+
+**주요 설계 목적**
+
+- 의존성 주입: 쿼리 클라이언트의 중앙 집중식 관리
+- 이벤트 기반 캐시 관리: 사용자 상호작용에 따른 자동 데이터 갱신
+- 에러 방지: Context 미설치 시 개발 단계에서 바로 오류 감지
