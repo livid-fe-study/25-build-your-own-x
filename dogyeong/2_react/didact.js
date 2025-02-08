@@ -200,6 +200,36 @@ function useState(initial) {
   return [hook.state, setState]
 }
 
+function useEffect(effect, deps) {
+  const oldHook = wipFiber.alternate?.hooks?.[hookIndex]
+  const hook = {
+    firstRender: !oldHook,
+    prevDeps: oldHook ? oldHook.prevDeps : null,
+    cleanup: oldHook ? oldHook.cleanup : null,
+  }
+
+  // 첫 번째 렌더링일 때
+  // effect를 실행한다.
+  if (hook.firstRender) {
+    hook.firstRender = false
+    hook.cleanup = effect()
+    hook.prevDeps = deps
+  }
+  // deps가 변경되었을 때
+  // cleanup을 실행하고 effect를 실행한다.
+  else if (deps.some((dep, i) => !Object.is(dep, hook.prevDeps[i]))) {
+    hook.cleanup()
+    hook.cleanup = effect()
+    hook.prevDeps = deps
+  }
+  // deps가 변경되지 않았을 때
+  // effect를 실행하지 않는다.
+  else {}
+
+  wipFiber.hooks.push(hook)
+  hookIndex++
+}
+
 function updateHostComponent(fiber) {
   if (!fiber.dom) {
     fiber.dom = createDom(fiber)
@@ -262,4 +292,5 @@ export const Didact = {
   createElement,
   render,
   useState,
+  useEffect,
 }
