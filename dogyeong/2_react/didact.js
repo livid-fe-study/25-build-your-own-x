@@ -3,8 +3,15 @@ function createElement(type, props, ...children) {
     type,
     props: {
       ...props,
-      children: children.map((child) =>
-        typeof child === 'object' ? child : createTextElement(child),
+      children: children.flatMap((child) => {
+        if (Array.isArray(child)) {
+          return child
+        } 
+        if (typeof child === 'object') {
+          return [child]
+        }
+        return [createTextElement(child)]
+      }
       ),
     },
   }
