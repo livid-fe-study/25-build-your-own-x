@@ -6,7 +6,9 @@
   "scripts": {
     "test": "vitest",
     "lint": "yarn biome check --write --unsafe .",
-    "transpile-react": "rm -rf dist && npx babel 2_react  --out-dir dist --extensions .js,.jsx --config-file ./2_react/babel.config.json"
+    "transpile": "rm -rf dist && yarn transpile-react && yarn transpile-tanstack-query",
+    "transpile-react": "npx babel 2_react --out-dir dist/2_react --extensions .js,.jsx --config-file ./2_react/babel.config.json",
+    "transpile-tanstack-query": "npx babel 3_tanstack-query --out-dir dist/3_tanstack-query --extensions .js,.jsx --config-file ./2_react/babel.config.json"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",

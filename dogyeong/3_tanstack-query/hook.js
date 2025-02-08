@@ -1,5 +1,5 @@
-import { Didact } from '../2_react/didact'
-import { QueryClient } from './query-client'
+import { Didact } from '../2_react/didact.js'
+import { QueryClient } from './query-client.js'
 
 const client = new QueryClient()
 
