@@ -1,11 +1,12 @@
 import { QueryCache } from './query-cache.js'
+import { hashKey } from './util.js'
 
 export class QueryClient {
   cache
 
   constructor(config) {
-    this.cache = config.cache || new QueryCache()
-    this.defaultOptions = config.defaultOptions
+    this.cache = config?.cache || new QueryCache()
+    this.defaultOptions = config?.defaultOptions
   }
 
   getQueryCache = () => {

@@ -1,13 +1,11 @@
 import { Didact } from '../2_react/didact.js'
 import { QueryClient } from './query-client.js'
+import { QueryObserver } from './query-observer.js'
 
 const client = new QueryClient()
 
 const useBaseQuery = (options, Observer, queryClient) => {
-  const [observer] = Didact.useState(() => {
-    const defaultOptions = client.defaultQueryOptions(options)
-    return new Observer(client, defaultOptions)
-  })
+  const [observer] = Didact.useState(new Observer(client, client.defaultQueryOptions(options)))
 
   // core 로직과 React를 연결합니다.
   Didact.useSyncExternalStore(

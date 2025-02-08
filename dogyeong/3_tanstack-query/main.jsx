@@ -1,8 +1,19 @@
 import { Didact } from '../2_react/didact.js'
+import { useQuery } from './hook.js'
 
 /** @jsx Didact.createElement */
 function TodoList() {
   // State variables
+  const res = useQuery({
+    queryKey: ['todos'],
+    queryFn: async () => {
+      const response = await fetch(
+        'https://jsonplaceholder.typicode.com/todos?_limit=4',
+      )
+      return response.json()
+    },
+  })
+  console.log(res)
   const [tasks, setTasks] = Didact.useState([]) // Holds the list of tasks
   const [inputValue, setInputValue] = Didact.useState('') // Holds the value of the input field
   const [filter, setFilter] = Didact.useState('all') // Holds the current filter type
