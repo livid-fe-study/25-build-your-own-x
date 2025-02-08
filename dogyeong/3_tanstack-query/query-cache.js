@@ -1,5 +1,5 @@
-import { Query } from "./query"
-import { hashKey } from "./util"
+import { Query } from './query'
+import { hashKey } from './util'
 
 export class QueryCache {
   queries

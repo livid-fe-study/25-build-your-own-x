@@ -1,4 +1,4 @@
-import { QueryCache } from "./query-cache"
+import { QueryCache } from './query-cache'
 
 export class QueryClient {
   cache

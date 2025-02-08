@@ -9,7 +9,7 @@ const store = {
   },
   subscribe(listener) {
     store.listeners.push(listener)
-  }
+  },
 }
 
 /** @jsx Didact.createElement */
@@ -31,9 +31,16 @@ function Counter() {
     }
   }, [state])
 
-  const storeValue = Didact.useSyncExternalStore(() => store.value, store.subscribe)
+  const storeValue = Didact.useSyncExternalStore(
+    () => store.value,
+    store.subscribe,
+  )
 
-  return <h1 onClick={() => setState((c) => c + 1)}>Count: {state}, storeValue: {storeValue}</h1>
+  return (
+    <h1 onClick={() => setState((c) => c + 1)}>
+      Count: {state}, storeValue: {storeValue}
+    </h1>
+  )
 }
 
 const element = <Counter />

@@ -224,7 +224,8 @@ function useEffect(effect, deps) {
   }
   // deps가 변경되지 않았을 때
   // effect를 실행하지 않는다.
-  else {}
+  else {
+  }
 
   wipFiber.hooks.push(hook)
   hookIndex++
