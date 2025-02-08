@@ -230,6 +230,26 @@ function useEffect(effect, deps) {
   hookIndex++
 }
 
+function useSyncExternalStore(getSnapshot, subscribe) {
+  const [{ state }, forceRerender] = useState({ state: getSnapshot() })
+
+  useEffect(() => {
+    const handleStoreChange = () => {
+      const nextState = getSnapshot()
+      if (!Object.is(state, nextState)) {
+        forceRerender(() => ({ state: nextState }))
+      }
+    }
+
+    handleStoreChange()
+    const unsubscribe = subscribe(handleStoreChange)
+
+    return unsubscribe
+  }, [subscribe])
+
+  return getSnapshot()
+}
+
 function updateHostComponent(fiber) {
   if (!fiber.dom) {
     fiber.dom = createDom(fiber)
@@ -293,4 +313,5 @@ export const Didact = {
   render,
   useState,
   useEffect,
+  useSyncExternalStore,
 }

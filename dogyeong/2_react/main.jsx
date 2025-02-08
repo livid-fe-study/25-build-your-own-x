@@ -1,4 +1,16 @@
-import { Didact } from './didact'
+import { Didact } from './didact.js'
+
+const store = {
+  value: 1,
+  listeners: [],
+  onChange() {
+    store.value += 10
+    store.listeners.forEach((listener) => listener())
+  },
+  subscribe(listener) {
+    store.listeners.push(listener)
+  }
+}
 
 /** @jsx Didact.createElement */
 function Counter() {
@@ -7,6 +19,7 @@ function Counter() {
   Didact.useEffect(() => {
     const handler = () => {
       console.log('state: ', state)
+      store.onChange()
     }
 
     console.log('run useEffect')
@@ -18,7 +31,9 @@ function Counter() {
     }
   }, [state])
 
-  return <h1 onClick={() => setState((c) => c + 1)}>Count: {state}</h1>
+  const storeValue = Didact.useSyncExternalStore(() => store.value, store.subscribe)
+
+  return <h1 onClick={() => setState((c) => c + 1)}>Count: {state}, storeValue: {storeValue}</h1>
 }
 
 const element = <Counter />
