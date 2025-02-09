@@ -261,17 +261,30 @@ function reconcileChildren(wipFiber, elements) {
   }
 }
 
+function useCallback(callback, deps) {
+  const oldHook =
+    wipFiber.alternate &&
+    wipFiber.alternate.hooks &&
+    wipFiber.alternate.hooks[hookIndex];
+
+  const hook = {
+    memoizedCallback: callback,
+    deps,
+  };
+
+  if (oldHook) {
+    const hasChanged = deps.some((dep, i) => !Object.is(dep, oldHook.deps[i]));
+    hook.memoizedCallback = hasChanged ? callback : oldHook.memoizedCallback;
+  }
+
+  wipFiber.hooks.push(hook);
+  hookIndex++;
+  return hook.memoizedCallback;
+}
+
 export const Didact = {
   createElement,
   render,
   useState,
+  useCallback,
 };
-
-// /** @jsx Didact.createElement */
-// function Counter() {
-//   const [state, setState] = Didact.useState(1);
-//   return <h1 onClick={() => setState((c) => c + 1)}>Count: {state}</h1>;
-// }
-// const element = <Counter />;
-// const container = document.getElementById("root");
-// Didact.render(element, container);
