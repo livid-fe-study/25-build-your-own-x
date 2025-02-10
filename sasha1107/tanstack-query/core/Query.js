@@ -34,7 +34,7 @@ export class Query {
 
     this.gcTimeout = setTimeout(() => {
       this.cache.remove(this);
-      this.cache.notify();
+      this.cache.notify(); // gc 시점에 QueryCache에게 이벤트를 발행합니다
     }, gcTime);
   };
 
