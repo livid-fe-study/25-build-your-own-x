@@ -47,8 +47,8 @@ export class Query {
     this.clearGcTimeout()
 
     const unsubscribe = () => {
-      this.observers = this.observers.filter(() => {
-        return d !== observer
+      this.observers = this.observers.filter((o) => {
+        return o !== observer
       })
 
       if (!this.observers.length) {
