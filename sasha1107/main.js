@@ -13,6 +13,12 @@ function Counter() {
     },
     "Click me"
   );
+  Didact.useEffect(() => {
+    console.log("state", state);
+    return () => {
+      console.log("cleanup", state);
+    };
+  }, [state]);
   return Didact.createElement("div", null, h1, button);
 }
 const element = Didact.createElement(Counter, null);

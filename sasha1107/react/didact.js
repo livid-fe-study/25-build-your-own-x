@@ -97,6 +97,25 @@ function commitWork(fiber) {
     commitDeletion(fiber, domParent);
   }
 
+  if (fiber.effects) {
+    fiber.effects.forEach((effect, index) => {
+      if (effect.cleanup) {
+        effect.cleanup();
+      }
+
+      if (effect.callback) {
+        effect.callback();
+      }
+
+      // effect 실행 시 clean-up 함수 실행하기 위해 업데이트
+      const cleanup = effect.callback();
+
+      if (typeof cleanup === "function") {
+        effect.cleanup = cleanup;
+      }
+    });
+  }
+
   commitWork(fiber.child);
   commitWork(fiber.sibling);
 }
@@ -163,11 +182,14 @@ function performUnitOfWork(fiber) {
 
 let wipFiber = null;
 let hookIndex = null;
+let effectIndex = null;
 
 function updateFunctionComponent(fiber) {
   wipFiber = fiber;
   hookIndex = 0;
+  effectIndex = 0;
   wipFiber.hooks = [];
+  wipFiber.effects = [];
   const children = [fiber.type(fiber.props)];
   reconcileChildren(fiber, children);
 }
@@ -203,6 +225,33 @@ function useState(initial) {
   return [hook.state, setState];
 }
 
+function useEffect(callback, deps) {
+  const oldEffect =
+    wipFiber.alternate &&
+    wipFiber.alternate.effects &&
+    wipFiber.alternate.effects[effectIndex];
+
+  const effect = {
+    callback,
+    deps,
+    cleanup: undefined,
+  };
+
+  if (oldEffect) {
+    const oldDeps = oldEffect.deps;
+    if (oldDeps) {
+      const hasChanged = !deps || deps.some((dep, i) => dep !== oldDeps[i]);
+      if (!hasChanged) {
+        return;
+      }
+    }
+  }
+  if (oldEffect?.cleanup) {
+    effect.cleanup = oldEffect.cleanup;
+  }
+  wipFiber.effects.push(effect);
+  effectIndex++;
+}
 function updateHostComponent(fiber) {
   if (!fiber.dom) {
     fiber.dom = createDom(fiber);
@@ -287,4 +336,5 @@ export const Didact = {
   render,
   useState,
   useCallback,
+  useEffect,
 };
