@@ -211,11 +211,14 @@ function useState(initial) {
 
   const setState = (action) => {
     hook.queue.push(action);
-    wipRoot = {
-      dom: currentRoot.dom,
-      props: currentRoot.props,
-      alternate: currentRoot,
-    };
+    if (!wipRoot) {
+      wipRoot = {
+        dom: currentRoot.dom,
+        props: currentRoot.props,
+        alternate: currentRoot,
+      };
+    }
+
     nextUnitOfWork = wipRoot;
     deletions = [];
   };
@@ -331,10 +334,31 @@ function useCallback(callback, deps) {
   return hook.memoizedCallback;
 }
 
-export const Didact = {
+function useSyncExternalStore(getSnapshot, subscribe) {
+  const [{ state }, forceRerender] = useState({ state: getSnapshot() });
+
+  useEffect(() => {
+    const handleStoreChange = () => {
+      const nextState = getSnapshot();
+      if (!Object.is(state, nextState)) {
+        forceRerender(() => ({ state: nextState }));
+      }
+    };
+
+    handleStoreChange();
+    const unsubscribe = subscribe(handleStoreChange);
+
+    return unsubscribe;
+  }, [subscribe]);
+
+  return getSnapshot();
+}
+
+export {
   createElement,
   render,
   useState,
   useCallback,
   useEffect,
+  useSyncExternalStore,
 };

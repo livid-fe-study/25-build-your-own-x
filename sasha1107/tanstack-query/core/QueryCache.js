@@ -1,5 +1,5 @@
-import { Query } from "./Query";
-import { hashKey } from "./util";
+import { Query } from "./Query.js";
+import { hashKey } from "./util.js";
 
 class QueryCache {
   queries;

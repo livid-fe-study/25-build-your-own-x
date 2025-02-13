@@ -1,10 +1,20 @@
-import { Didact } from "./react/didact.js";
+import { useState, useEffect, createElement, render } from "./react/index.js";
+import useQuery from "./tanstack-query/react/useQuery.js";
 
 /** @jsx Didact.createElement */
 function Counter() {
-  const [state, setState] = Didact.useState(1);
-  const h1 = Didact.createElement("h1", null, "Count: ", state);
-  const button = Didact.createElement(
+  const [state, setState] = useState(1);
+  const { data = [], isFetching: isLoading } = useQuery({
+    queryKey: ["todos"],
+    queryFn: async () => {
+      const response = await fetch(
+        "https://jsonplaceholder.typicode.com/todos?_limit=4"
+      );
+      return response.json();
+    },
+  });
+  const h1 = createElement("h1", null, "Count: ", state);
+  const button = createElement(
     "button",
     {
       onClick: () => {
@@ -13,14 +23,16 @@ function Counter() {
     },
     "Click me"
   );
-  Didact.useEffect(() => {
+  // const h2 = createElement("h2", null, "Todos: ", data);
+  console.log("data", data);
+  useEffect(() => {
     console.log("state", state);
     return () => {
       console.log("cleanup", state);
     };
   }, [state]);
-  return Didact.createElement("div", null, h1, button);
+  return createElement("div", null, h1, button);
 }
-const element = Didact.createElement(Counter, null);
+const element = createElement(Counter, null);
 const container = document.getElementById("root");
-Didact.render(element, container);
+render(element, container);
