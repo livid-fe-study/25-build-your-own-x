@@ -1,7 +1,31 @@
-let wipRoot = null
-let currentRoot = null
-let nextUnitOfWork = null
-let deletions = null
+function createElement(type, props, ...children) {
+  return {
+    type,
+    props: {
+      ...props,
+      children: children.flatMap((child) => {
+        if (Array.isArray(child)) {
+          return child
+        } 
+        if (typeof child === 'object') {
+          return [child]
+        }
+        return [createTextElement(child)]
+      }
+      ),
+    },
+  }
+}
+
+function createTextElement(text) {
+  return {
+    type: 'TEXT_ELEMENT',
+    props: {
+      nodeValue: text,
+      children: [],
+    },
+  }
+}
 
 function createDom(fiber) {
   const dom =
@@ -9,18 +33,13 @@ function createDom(fiber) {
       ? document.createTextNode('')
       : document.createElement(fiber.type)
 
-  const isProperty = (key) => key !== 'children'
-  Object.keys(fiber.props)
-    .filter(isProperty)
-    .forEach((name) => {
-      dom[name] = fiber.props[name]
-    })
+  updateDom(dom, {}, fiber.props)
 
   return dom
 }
 
 const isEvent = (key) => key.startsWith('on')
-const isProperty = (key) => key !== 'children'
+const isProperty = (key) => key !== 'children' && !isEvent(key)
 const isNew = (prev, next) => (key) => prev[key] !== next[key]
 const isGone = (prev, next) => (key) => !(key in next)
 function updateDom(dom, prevProps, nextProps) {
@@ -59,8 +78,6 @@ function updateDom(dom, prevProps, nextProps) {
     })
 }
 
-// 커밋 페이즈
-// 이 단계에서는 fiber 트리를 순회하면서 모든 요소를 DOM에 반영한다.
 function commitRoot() {
   deletions.forEach(commitWork)
   commitWork(wipRoot.child)
@@ -100,7 +117,7 @@ function commitDeletion(fiber, domParent) {
 }
 
 function render(element, container) {
-  nextUnitOfWork = wipRoot = {
+  wipRoot = {
     dom: container,
     props: {
       children: [element],
@@ -108,16 +125,21 @@ function render(element, container) {
     alternate: currentRoot,
   }
   deletions = []
+  nextUnitOfWork = wipRoot
 }
 
-function workLoop(deadline: IdleDeadline) {
+let nextUnitOfWork = null
+let currentRoot = null
+let wipRoot = null
+let deletions = null
+
+function workLoop(deadline) {
   let shouldYield = false
   while (nextUnitOfWork && !shouldYield) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork)
     shouldYield = deadline.timeRemaining() < 1
   }
 
-  // 모든 작업 unit이 끝나면 commit 단계로 넘어간다.
   if (!nextUnitOfWork && wipRoot) {
     commitRoot()
   }
@@ -125,24 +147,15 @@ function workLoop(deadline: IdleDeadline) {
   requestIdleCallback(workLoop)
 }
 
-// fiber는 세 가지 일을 한다.
-function performUnitOfWork(fiber) {
-  // 1. DOM 노드를 생성한다.
-  // 2. 자식들을 fiber 트리로 만든다.
+requestIdleCallback(workLoop)
 
-  // 함수 컴포넌트인지, 일반 JSX 요소인지 확인한다.
+function performUnitOfWork(fiber) {
   const isFunctionComponent = fiber.type instanceof Function
   if (isFunctionComponent) {
     updateFunctionComponent(fiber)
   } else {
     updateHostComponent(fiber)
   }
-
-  // 3. 다음 작업 단위를 결정한다.
-  // 다음 작업 단위를 결정할 때는 하위 작업 단위를 먼저 확인한다.
-  // - 자식이 있으면 자식으로 이동한다.
-  // - 자식이 없으면 형제로 이동한다.
-  // - 형제도 없으면 부모로 이동한다.
   if (fiber.child) {
     return fiber.child
   }
@@ -179,21 +192,72 @@ function useState(initial) {
   })
 
   const setState = (action) => {
-    hook.queue.push(action)
-
-    // render와 동일하게 요소를 다시 그리는 작업을 수행한다.
-    // 새로운 렌더 페이즈 시작
-    nextUnitOfWork = wipRoot = {
-      dom: currentRoot.dom,
-      props: currentRoot.props,
-      alternate: currentRoot,
-    }
-    deletions = []
+      hook.queue.push(action)
+      if (!wipRoot) {
+        wipRoot = {
+         dom: currentRoot.dom,
+         props: currentRoot.props,
+         alternate: currentRoot,
+       }
+      }
+      nextUnitOfWork = wipRoot
+      deletions = []
   }
 
   wipFiber.hooks.push(hook)
   hookIndex++
   return [hook.state, setState]
+}
+
+function useEffect(effect, deps) {
+  const oldHook = wipFiber.alternate?.hooks?.[hookIndex]
+  const hook = {
+    firstRender: !oldHook,
+    prevDeps: oldHook ? oldHook.prevDeps : null,
+    cleanup: oldHook ? oldHook.cleanup : null,
+  }
+
+  // 첫 번째 렌더링일 때
+  // effect를 실행한다.
+  if (hook.firstRender) {
+    hook.firstRender = false
+    hook.cleanup = effect()
+    hook.prevDeps = deps
+  }
+  // deps가 변경되었을 때
+  // cleanup을 실행하고 effect를 실행한다.
+  else if (deps.some((dep, i) => !Object.is(dep, hook.prevDeps[i]))) {
+    hook.cleanup()
+    hook.cleanup = effect()
+    hook.prevDeps = deps
+  }
+  // deps가 변경되지 않았을 때
+  // effect를 실행하지 않는다.
+  else {
+  }
+
+  wipFiber.hooks.push(hook)
+  hookIndex++
+}
+
+function useSyncExternalStore(getSnapshot, subscribe) {
+  const [{ state }, forceRerender] = useState({ state: getSnapshot() })
+
+  useEffect(() => {
+    const handleStoreChange = () => {
+      const nextState = getSnapshot()
+      if (!Object.is(state, nextState)) {
+        forceRerender(() => ({ state: nextState }))
+      }
+    }
+
+    handleStoreChange()
+    const unsubscribe = subscribe(handleStoreChange)
+
+    return unsubscribe
+  }, [subscribe])
+
+  return getSnapshot()
 }
 
 function updateHostComponent(fiber) {
@@ -203,8 +267,6 @@ function updateHostComponent(fiber) {
   reconcileChildren(fiber, fiber.props.children)
 }
 
-// 자식 요소 재조정.
-// 요소 업데이트 또는 삭제에도 대응할 수 있어야 한다.
 function reconcileChildren(wipFiber, elements) {
   let index = 0
   let oldFiber = wipFiber.alternate?.child
@@ -256,6 +318,10 @@ function reconcileChildren(wipFiber, elements) {
   }
 }
 
-requestIdleCallback(workLoop)
-
-export { render, useState }
+export const Didact = {
+  createElement,
+  render,
+  useState,
+  useEffect,
+  useSyncExternalStore,
+}
