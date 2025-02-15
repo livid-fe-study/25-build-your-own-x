@@ -1,19 +1,23 @@
-import { Query } from "./Query";
-import { hashKey } from "./util";
+import { Query } from "./Query.js";
+import { hashKey } from "./util.js";
 
-export class QueryCache {
+class QueryCache {
   queries;
+  listeners;
 
   constructor() {
-    /**
-     * - key: queryHash (queryKey 값을 기반으로 생성됩니다.)
-     * - value: Query object
-     */
     this.queries = new Map();
+    this.listeners = new Set();
   }
 
   get = (queryHash) => {
     return this.queries.get(queryHash);
+  };
+
+  getAll = () => {
+    const queries = this.queries.values();
+
+    return [...queries];
   };
 
   build(client, options) {
@@ -31,6 +35,7 @@ export class QueryCache {
       });
 
       this.queries.set(query.queryHash, query);
+      this.notify();
     }
 
     return query;
@@ -39,4 +44,30 @@ export class QueryCache {
   remove = (query) => {
     this.queries.delete(query.queryHash);
   };
+
+  subscribe = (listener) => {
+    this.listeners.add(listener);
+
+    const unsubscribe = () => {
+      this.listeners.delete(listener);
+    };
+
+    return unsubscribe;
+  };
+
+  notify = () => {
+    this.listeners.forEach((callback) => {
+      callback();
+    });
+  };
+
+  onFocus = () => {
+    const queries = this.getAll();
+
+    queries.forEach((query) => {
+      query.fetch();
+    });
+  };
 }
+
+export default QueryCache;

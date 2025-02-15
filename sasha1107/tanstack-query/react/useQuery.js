@@ -1,14 +1,20 @@
-import { useCallback, useState, useSyncExternalStore } from "react";
-import QueryObserver from "../core/QueryObserver";
-import { useQueryClient } from "./QueryClientProvider";
+// import { useCallback, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useState,
+  useSyncExternalStore,
+} from "../../react/index.js";
+import QueryObserver from "../core/QueryObserver.js";
+// import { useQueryClient } from "./QueryClientProvider";
+import { QueryClient } from "../core/QueryClient.js";
+const client = new QueryClient();
 
 const useBaseQuery = (options, Observer, queryClient) => {
-  const client = useQueryClient(queryClient);
+  // const client = useQueryClient(queryClient);
 
-  const [observer] = useState(() => {
-    const defaultOptions = client.defaultQueryOptions(options);
-    return new Observer(client, defaultOptions);
-  });
+  const [observer] = useState(
+    new Observer(client, client.defaultQueryOptions(options))
+  );
 
   const subscribe = useCallback(
     (onStoreChange) => {

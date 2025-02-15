@@ -97,6 +97,25 @@ function commitWork(fiber) {
     commitDeletion(fiber, domParent);
   }
 
+  if (fiber.effects) {
+    fiber.effects.forEach((effect, index) => {
+      if (effect.cleanup) {
+        effect.cleanup();
+      }
+
+      if (effect.callback) {
+        effect.callback();
+      }
+
+      // effect 실행 시 clean-up 함수 실행하기 위해 업데이트
+      const cleanup = effect.callback();
+
+      if (typeof cleanup === "function") {
+        effect.cleanup = cleanup;
+      }
+    });
+  }
+
   commitWork(fiber.child);
   commitWork(fiber.sibling);
 }
@@ -163,11 +182,14 @@ function performUnitOfWork(fiber) {
 
 let wipFiber = null;
 let hookIndex = null;
+let effectIndex = null;
 
 function updateFunctionComponent(fiber) {
   wipFiber = fiber;
   hookIndex = 0;
+  effectIndex = 0;
   wipFiber.hooks = [];
+  wipFiber.effects = [];
   const children = [fiber.type(fiber.props)];
   reconcileChildren(fiber, children);
 }
@@ -189,11 +211,14 @@ function useState(initial) {
 
   const setState = (action) => {
     hook.queue.push(action);
-    wipRoot = {
-      dom: currentRoot.dom,
-      props: currentRoot.props,
-      alternate: currentRoot,
-    };
+    if (!wipRoot) {
+      wipRoot = {
+        dom: currentRoot.dom,
+        props: currentRoot.props,
+        alternate: currentRoot,
+      };
+    }
+
     nextUnitOfWork = wipRoot;
     deletions = [];
   };
@@ -203,6 +228,33 @@ function useState(initial) {
   return [hook.state, setState];
 }
 
+function useEffect(callback, deps) {
+  const oldEffect =
+    wipFiber.alternate &&
+    wipFiber.alternate.effects &&
+    wipFiber.alternate.effects[effectIndex];
+
+  const effect = {
+    callback,
+    deps,
+    cleanup: undefined,
+  };
+
+  if (oldEffect) {
+    const oldDeps = oldEffect.deps;
+    if (oldDeps) {
+      const hasChanged = !deps || deps.some((dep, i) => dep !== oldDeps[i]);
+      if (!hasChanged) {
+        return;
+      }
+    }
+  }
+  if (oldEffect?.cleanup) {
+    effect.cleanup = oldEffect.cleanup;
+  }
+  wipFiber.effects.push(effect);
+  effectIndex++;
+}
 function updateHostComponent(fiber) {
   if (!fiber.dom) {
     fiber.dom = createDom(fiber);
@@ -261,17 +313,52 @@ function reconcileChildren(wipFiber, elements) {
   }
 }
 
-export const Didact = {
+function useCallback(callback, deps) {
+  const oldHook =
+    wipFiber.alternate &&
+    wipFiber.alternate.hooks &&
+    wipFiber.alternate.hooks[hookIndex];
+
+  const hook = {
+    memoizedCallback: callback,
+    deps,
+  };
+
+  if (oldHook) {
+    const hasChanged = deps.some((dep, i) => !Object.is(dep, oldHook.deps[i]));
+    hook.memoizedCallback = hasChanged ? callback : oldHook.memoizedCallback;
+  }
+
+  wipFiber.hooks.push(hook);
+  hookIndex++;
+  return hook.memoizedCallback;
+}
+
+function useSyncExternalStore(getSnapshot, subscribe) {
+  const [{ state }, forceRerender] = useState({ state: getSnapshot() });
+
+  useEffect(() => {
+    const handleStoreChange = () => {
+      const nextState = getSnapshot();
+      if (!Object.is(state, nextState)) {
+        forceRerender(() => ({ state: nextState }));
+      }
+    };
+
+    handleStoreChange();
+    const unsubscribe = subscribe(handleStoreChange);
+
+    return unsubscribe;
+  }, [subscribe]);
+
+  return getSnapshot();
+}
+
+export {
   createElement,
   render,
   useState,
+  useCallback,
+  useEffect,
+  useSyncExternalStore,
 };
-
-// /** @jsx Didact.createElement */
-// function Counter() {
-//   const [state, setState] = Didact.useState(1);
-//   return <h1 onClick={() => setState((c) => c + 1)}>Count: {state}</h1>;
-// }
-// const element = <Counter />;
-// const container = document.getElementById("root");
-// Didact.render(element, container);
