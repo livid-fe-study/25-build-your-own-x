@@ -6,13 +6,12 @@ function createElement(type, props, ...children) {
       children: children.flatMap((child) => {
         if (Array.isArray(child)) {
           return child
-        } 
+        }
         if (typeof child === 'object') {
           return [child]
         }
         return [createTextElement(child)]
-      }
-      ),
+      }),
     },
   }
 }
@@ -192,16 +191,16 @@ function useState(initial) {
   })
 
   const setState = (action) => {
-      hook.queue.push(action)
-      if (!wipRoot) {
-        wipRoot = {
-         dom: currentRoot.dom,
-         props: currentRoot.props,
-         alternate: currentRoot,
-       }
+    hook.queue.push(action)
+    if (!wipRoot) {
+      wipRoot = {
+        dom: currentRoot.dom,
+        props: currentRoot.props,
+        alternate: currentRoot,
       }
-      nextUnitOfWork = wipRoot
-      deletions = []
+    }
+    nextUnitOfWork = wipRoot
+    deletions = []
   }
 
   wipFiber.hooks.push(hook)

@@ -163,6 +163,7 @@ function TodoList() {
             onChange={handleInputChange}
           />
           <button
+            type="button"
             id="btn"
             onClick={editTaskId ? handleUpdateTask : handleAddTask}
           >
@@ -212,7 +213,9 @@ function TodoList() {
 
         <div className="filters">
           <div className="dropdown">
-            <button className="dropbtn">Filter</button>
+            <button type="button" className="dropbtn">
+              Filter
+            </button>
             <div className="dropdown-content">
               <a href="#" id="all" onClick={() => handleFilterChange('all')}>
                 All
