@@ -4,7 +4,7 @@ import { useQuery } from './hook.js'
 /** @jsx Didact.createElement */
 function TodoList() {
   // State variables
-  const res = useQuery({
+  const { data: tasks } = useQuery({
     queryKey: ['todos'],
     queryFn: async () => {
       const response = await fetch(
@@ -13,32 +13,10 @@ function TodoList() {
       return response.json()
     },
   })
-  console.log(res)
-  const [tasks, setTasks] = Didact.useState([]) // Holds the list of tasks
+
   const [inputValue, setInputValue] = Didact.useState('') // Holds the value of the input field
   const [filter, setFilter] = Didact.useState('all') // Holds the current filter type
-  const [isLoading, setIsLoading] = Didact.useState(true) // Indicates whether the data is being loaded
   const [editTaskId, setEditTaskId] = Didact.useState(null) // Holds the ID of the task being edited
-
-  // Fetch initial data
-  Didact.useEffect(() => {
-    fetchTodos()
-  }, [])
-
-  // Fetch todos from an API
-  async function fetchTodos() {
-    try {
-      const response = await fetch(
-        'https://jsonplaceholder.typicode.com/todos?_limit=4',
-      )
-      const todos = await response.json()
-      setTasks(() => todos)
-      setIsLoading(() => false)
-    } catch (error) {
-      console.log('Error fetching todos:', error)
-      setIsLoading(() => false)
-    }
-  }
 
   // Handle input change
   const handleInputChange = (event) => {
@@ -165,7 +143,7 @@ function TodoList() {
   })
 
   // Display loading message while data is being fetched
-  if (isLoading) {
+  if (!tasks) {
     return <div>Loading...</div>
   }
 
