@@ -28,7 +28,7 @@
 
 ```js
 let ID = -1;
-let dependanceArray = [];
+let dependencyArray = [];
 let fileNameToIdIndex = [];
 
 // 주어진 파일에서 import 문을 찾아 배열로 반환
