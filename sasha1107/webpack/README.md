@@ -129,8 +129,7 @@ console.log(exportObject);
 ```
 
 위와 같이 내보낸 모든 변수가 내보내기 객체에 추가됩니다.
-exportObjext를 print해보면 require 함수가 정확히 복제된 것을 확인할 수 있습니다.
-
+exportObject를 print해보면 require 함수가 정확히 복제된 것을 확인할 수 있습니다.
 이제 런타임 코드를 생성하기 위한 퍼즐의 마지막 조각입니다. 가장 먼저 할 일은 런타임 코드를 생성하기 위해 함수에 대한 모든 정보를 전달하는 것입니다. index.js는 의존성 배열을 생성하는 동안 가장 먼저 처리한 파일이므로 메인 함수는 ID=0의 함수가 될 것입니다. 아래는 index=0에서 main function을 가져와서 함수 호출을 시작하는 코드입니다.
 이제 require 함수가 호출되면 자바스크립트가 로컬 범위에서 찾을 수 없는 경우 전역 범위를 살펴보고 앞서 설명한 것처럼 exportObject 변수가 설정되므로 window.require 함수가 호출됩니다. 이제 fileNameToIdIndex 변수가 있는 이유는 require가 파일 이름을 전달하고 해당 변수에 저장된 맵핑을 실행해야 하는 코드를 알아야 하기 때문입니다.
 
