@@ -40,6 +40,8 @@ function buildDependencyArray(fileName) {
 function transpile(fileName) {
   let inputCode = fs.readFileSync(fileName, { encoding: 'utf-8' })
   
+  // webpack의 require 함수는 절대경로를 사용한다.
+  // 따라서 import 문의 상대경로를 절대경로로 변환한다.
   for (const line of inputCode.split('\n')) {
     if (line.startsWith('import')) {
       let filePath = line.split('from')[1].replace(/['";]/g, '').trim()
