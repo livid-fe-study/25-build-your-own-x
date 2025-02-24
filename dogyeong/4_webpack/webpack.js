@@ -69,20 +69,29 @@ function transpile(fileName) {
 function generateRuntimeCode() {
   let metadata = ''
   let fileToId = ''
-  dependencyArray.forEach((obj) => {
-    metadata += `${obj.id}:function(exports){${obj.code}},`
+  dependencyArray.forEach(({ id, code }) => {
+    metadata += `
+      ${id} : function(exports) {
+        ${code}
+      },
+    `
   })
-  fileNameToIdIndex.forEach((file, index) => {
-    fileToId += `\'${file}\':\'${index}\',`
+  fileNameToIdIndex.forEach((file, id) => {
+    fileToId += `\'${file}\':\'${id}\',`
   })
   return `(function(metadata,fileToIdMapping){
-        window.require = function require(fileName){
+        window.require = function require(fileName) {
+            if (window.require.cache[fileName]) {
+              return window.require.cache[fileName];
+            }
             const id = fileToIdMapping[fileName];
             const f = metadata[id];
             let expObject = {};
             f(expObject);
+            window.require.cache[fileName] = expObject;
             return expObject;
         }
+        window.require.cache = {};
         const mainFunction = metadata['0'];
         mainFunction();
     })({${metadata}},{${fileToId}})`
