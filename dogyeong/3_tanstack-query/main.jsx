@@ -4,7 +4,7 @@ import { useQuery } from './hook.js'
 /** @jsx Didact.createElement */
 function TodoList() {
   // State variables
-  const { data: tasks } = useQuery({
+  const { data: tasks = [] } = useQuery({
     queryKey: ['todos'],
     queryFn: async () => {
       const response = await fetch(
