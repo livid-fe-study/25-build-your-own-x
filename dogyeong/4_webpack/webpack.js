@@ -12,8 +12,7 @@ function getDependencies(fileName) {
   for (const line of contents.split('\n')) {
     if (line.includes('import')) {
       let filePath = line.split('from')[1]
-      filePath = filePath.replace(';', '').trim()
-      filePath = filePath.replace(/'/g, '').trim()
+      filePath = filePath.replace(/['";]/g, '').trim()
       deps.push(path.resolve(fileName, '../', filePath))
     }
   }
@@ -100,4 +99,8 @@ buildDependencyArray(
   path.resolve(import.meta.dirname, '../3_tanstack-query/main.jsx'),
 )
 
-fs.writeFileSync('./bundle.js', generateRuntimeCode(), { encoding: 'utf-8' })
+fs.writeFileSync(
+  path.resolve(import.meta.dirname, '../dist/bundle.js'),
+  generateRuntimeCode(),
+  { encoding: 'utf-8' },
+)
