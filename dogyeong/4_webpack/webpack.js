@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import babel from '@babel/core'
-import babylon from 'babylon'
 
 let ID = -1
 const dependencyArray = []
@@ -39,18 +38,18 @@ function buildDependencyArray(fileName) {
 
 function transpile(fileName) {
   let inputCode = fs.readFileSync(fileName, { encoding: 'utf-8' })
-  
+
   // webpack의 require 함수는 절대경로를 사용한다.
   // 따라서 import 문의 상대경로를 절대경로로 변환한다.
   for (const line of inputCode.split('\n')) {
     if (line.startsWith('import')) {
-      let filePath = line.split('from')[1].replace(/['";]/g, '').trim()
+      const filePath = line.split('from')[1].replace(/['";]/g, '').trim()
       const absolutePath = path.resolve(fileName, '../', filePath)
       const newLine = line.replace(filePath, absolutePath)
       inputCode = inputCode.replace(line, newLine)
     }
   }
-  
+
   const { code } = babel.transformSync(inputCode, {
     presets: [
       '@babel/preset-react',
@@ -100,4 +99,5 @@ function generateRuntimeCode() {
 buildDependencyArray(
   path.resolve(import.meta.dirname, '../3_tanstack-query/main.jsx'),
 )
+
 fs.writeFileSync('./bundle.js', generateRuntimeCode(), { encoding: 'utf-8' })
